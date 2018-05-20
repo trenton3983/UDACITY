@@ -1,0 +1,56 @@
+```{r}
+library(readxl)
+library(tibble)
+library(ggplot2)
+library(plyr)
+library(dplyr)
+library(scales)
+library(memisc)
+library(reshape2)
+library(lubridate)
+library(ggthemes)
+library(gridExtra)
+library(alr3)
+library(rio)
+library(GGally)
+library(RColorBrewer)
+library(tidyr)
+```
+
+***
+## Setup & General
+
+```{r}
+drawdata <- read.csv('../Project/Data/drawdata.csv')
+```
+
+
+```{r, fig.width=10}
+names(drawdata) <- c('region','value')
+drawdata[,1] <-  tolower(drawdata[,1])
+
+states <- data.frame(state.center, state.abb)
+states <- states[!(states$state.abb %in% c("AK", "HI")),] # they aren't part of states_map
+
+states_map <- map_data("state")
+
+p1 <- ggplot()
+# borders
+p1 <- p1 + geom_map(data=states_map, map=states_map, aes(map_id=region), color="white", size=0.15)
+# fills
+p1 <- p1 + geom_map(data=drawdata, map=states_map, aes(fill=value, map_id=region), color="white", size=0.15)
+# labels
+p1 <- p1 + geom_text(data=states, aes(x=x, y=y, label=state.abb, group=NULL), size=2)
+# decent projection
+p1 <- p1 + coord_map("albers", lat0=39, lat1=45)
+p1 <- p1 + scale_fill_gradient2(low="#f7f4f9", mid="#df65b0", high="#67001f")
+# better theme
+p1 <- p1 + labs(x=NULL, y=NULL)
+p1 <- p1 + theme_bw()
+p1 <- p1 + theme(panel.grid=element_blank())
+p1 <- p1 + theme(panel.border=element_blank())
+p1 <- p1 + theme(axis.ticks=element_blank())
+p1 <- p1 + theme(axis.text=element_blank())
+p1
+```
+

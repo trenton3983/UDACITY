@@ -1,0 +1,439 @@
+---
+title: "UDACITY R Data Analysis Lesson 6"
+author: "Trenton J. McKinney"
+output:
+  html_notebook:
+    toc: true
+    toc_depth: 3
+    theme: "cerulean"
+    fig_width: 8
+---
+
+Resources:
+
+1. https://www.rdocumentation.org/packages/rmarkdown/versions/1.8/topics/html_notebook
+2. http://rmarkdown.rstudio.com/html_document_format.html
+3. https://bootswatch.com/
+
+```{r}
+library(readxl)
+library(tibble)
+library(ggplot2)
+library(dplyr)
+library(scales)
+library(reshape2)
+library(lubridate)
+library(ggthemes)
+library(gridExtra)
+library(alr3)
+library(rio)
+```
+
+***
+### Lesson 6: Setup & General
+```{r}
+data("diamonds")
+```
+
+```{r}
+?diamonds
+```
+
+```{r}
+summary(diamonds)
+```
+
+***
+### Lesson 6.1 Quiz: Price vs x
+Create a scatterplot of price vs x. using the ggplot syntax.
+```{r}
+ggplot(diamonds, aes(x = x, y = price, color = x)) +
+  geom_point() + 
+  scale_y_continuous(breaks=seq(1000, 19000, 2000),label=dollar) + 
+  scale_color_gradient(low = "#FF99FF", high = "#FF33FF") +
+  xlab("Length (mm)")
+```
+
+***
+### Lesson 6.2 Quiz: Findings - price vs. x
+There seems to be a few outliers and there's a exponential increase in price per length
+
+***
+### Lesson 6.3 Quiz: Correlations
+```{r}
+with(diamonds, cor.test(price, x))
+```
+
+```{r}
+with(diamonds, cor.test(price, y))
+```
+
+```{r}
+with(diamonds, cor.test(price, z))
+```
+
+***
+### Lesson 6.4 Quiz: price vs. depth
+```{r}
+p_pvd <- ggplot(diamonds, aes(x = depth, y = price, color = depth)) +
+  scale_y_continuous(breaks=seq(1000, 19000, 2000),label=dollar) +
+  scale_x_continuous(limits = c(43, 79), breaks = seq(43, 79, 2)) +
+  scale_color_gradient(low = "#FF99FF", high = "#FF33FF") +
+  xlab("Depth")
+
+p_pvd +
+  geom_point()
+```
+
+***
+### Lesson 6.5 Quiz: Adjustments - price vs. depth
+```{r}
+p_pvd +
+  geom_point(alpha = 1/20)
+```
+
+```{r}
+p_pvd +
+  geom_point(alpha = 1/100)
+```
+
+***
+### Lesson 6.6 Quiz: Adjustments - Typical Depth Range
+Most diamonds appear have a depth between 58 and 64
+
+***
+### Lesson 6.7 Quiz: Correlation - price and depth
+```{r}
+with(diamonds, cor.test(price, depth))
+```
+
+***
+### Lesson 6.8 Quiz: price and carat
+```{r}
+summary(diamonds$carat)
+(quantile(diamonds$price, .99))
+max(diamonds$price)
+(quantile(diamonds$carat, .99))
+max(diamonds$carat)
+```
+
+```{r}
+ggplot(diamonds, aes(x = carat, y = price, color = carat)) +
+  scale_y_continuous(limits = c(0, quantile(diamonds$price, .99)), breaks=seq(1000, 19000, 2000),label=dollar) +
+  scale_x_continuous(limits = c(0.2, quantile(diamonds$carat, .99)), breaks = seq(0.2, 2.2, 0.2)) +
+  scale_color_gradient(low = "#FF99FF", high = "#FF33FF") +
+  xlab("Carat") +
+  geom_point(alpha = 1/20) +
+  geom_hline(yintercept=c(326, 17378.22), color='#0033FF', linetype=3) +
+  geom_vline(xintercept=c(0.2, 2.18), color='#0033FF', linetype=3)
+```
+
+***
+### Lesson 6.9 Quiz: price vs. volume
+```{r}
+diamonds$volume <- diamonds$x * diamonds$y * diamonds$z
+```
+
+```{r}
+summary(diamonds$volume)
+summary(diamonds$price)
+```
+
+Resources:
+
+1. https://plot.ly/ggplot2/stat_smooth/
+2. http://ggplot2.tidyverse.org/reference/geom_smooth.html
+
+```{r}
+ggplot(diamonds, aes(x = volume, y = price, color = volume)) +
+  scale_y_continuous(breaks=seq(1000, 19000, 2000),label=dollar) +
+  scale_color_gradient(low = "#FF99FF", high = "#FF33FF") +
+  xlab(bquote('Volume ('~mm^3~')')) +
+  geom_point() +
+  geom_hline(yintercept=c(326, 18823), color='#0033FF', linetype=3) +
+  geom_vline(xintercept=c(0, 3840.60), color='#0033FF', linetype=3) +
+  geom_smooth(data = subset(diamonds, volume >=1 & volume < 630), aes(y = exp(x), x = volume))
+```
+
+***
+### Lesson 6.10 Quiz: Findings - price vs. volume
+There are outliers.  Some volumes are 0. There's an expensive diamond with a volume near 4000, and a cheaper diamond with a volume near 900.
+
+You can find out how many diamonds have 0 volume by using count(diamonds$volume == 0). The count() function comes with the plyr package.
+
+Note: If you ran the count function from plyr, you need to run this command in R to unload the plyr package.
+detach("package:plyr", unload=TRUE).  The plyr package will conflict with the dplyr package in later exercises.
+
+Depending on your investigation, it may or may not be important for you to understand how outliers, like these, came to be in your data.
+```{r}
+diamonds %>% 
+  count(volume == '0')
+```
+
+```{r}
+subset(diamonds, (volume == "0"))
+```
+
+
+***
+### Lesson 6.11 Quiz: Correlations on Subsets
+```{r}
+with(subset(diamonds, volume > 0 & volume < 800), cor.test(price, volume, method = 'pearson'))
+```
+
+***
+### Lesson 6.12 Quiz: Adjustments - price vs. volume
+```{r}
+ggplot(subset(diamonds, (volume > 0) & (volume < 800)), aes(x = volume, y = price, color = volume)) +
+  geom_point(alpha = 1/20) +
+  scale_y_continuous(breaks=seq(1000, 19000, 2000),label=dollar) +
+  scale_color_gradient(low = "#FF99FF", high = "#FF33FF") +
+  xlab(bquote('Volume ('~mm^3~')')) +
+  geom_hline(yintercept=c(326, 18823), color='#0033FF', linetype=3) +
+  geom_vline(xintercept=c(0, 800), color='#0033FF', linetype=3) +
+  geom_smooth(data = subset(diamonds, volume >= 1 & volume < 630), aes(y = exp(x), x = volume)) + 
+  geom_smooth(data = subset(diamonds, volume < 450), method = 'lm', se = TRUE)
+```
+
+***
+### Lesson 6.13 Quiz: Mean Price by Clarity
+```{r}
+diamondsByClarity<- diamonds %>%
+  group_by(clarity) %>%
+  summarise(mean_price = mean(price),
+            median_price = median(price),
+            min_price = min(price),
+            max_price = max(price),
+            n = n() ) %>%
+  arrange(clarity)
+```
+
+***
+### Lesson 6.14 Quiz: Bar Charts of Mean Price
+```{r}
+diamonds_by_clarity <- group_by(diamonds, clarity)
+diamonds_mp_by_clarity <- summarise(diamonds_by_clarity, mean_price = mean(price))
+
+diamonds_by_color <- group_by(diamonds, color)
+diamonds_mp_by_color <- summarise(diamonds_by_color, mean_price = mean(price))
+
+
+p1 <- ggplot(diamonds_mp_by_clarity, aes(x=clarity, y=mean_price, fill=clarity)) +
+  geom_bar(stat = "identity", color = "black") +
+  guides(fill = guide_legend(ncol=2, title.hjust=0.3)) +
+  xlab("Clarity") + ylab("Mean Price") +
+  scale_y_continuous(breaks=seq(0, 5000, 1000),label=dollar)
+
+p2 <- ggplot(diamonds_mp_by_color, aes(x=color, y=mean_price, fill=color)) +
+  geom_bar(stat = "identity", color = "black") +
+  guides(fill = guide_legend(ncol=2, title.hjust=0.4)) +
+  xlab("Color") + ylab("Mean Price") +
+  scale_y_continuous(breaks=seq(0, 5000, 1000),label=dollar)
+
+grid.arrange(p1, p2)
+```
+
+***
+### Lesson 6.15 Quiz: Trends in Mean Price
+We think something odd is going here. These trends seem to go against our intuition.
+
+Mean price tends to decrease as clarity improves. The same can be said for color.
+
+We encourage you to look into the mean price across cut.
+
+***
+### Lesson 6.16a Quiz: Gapminder Revisited
+The Gapminder website contains over 500 data sets with information about the world's population. Your task is to continue the investigation you did at the end of Problem Set 3 or you can start fresh and choose a different data set from Gapminder.
+
+If you're feeling adventurous or want to try some data munging see if you can find a data set or scrape one from the web.
+
+In your investigation, examine pairs of variable and create 2-5 plots that make use of the techniques from Lesson 4.
+
+You can find a link to the Gapminder website in the Instructor Notes.
+
+Once you've completed your investigation, create a post in the discussions that includes:
+1. the variable(s) you investigated, your observations, and any summary statistics
+2. snippets of code that created the plots
+3. links to the images of your plots
+
+Resources:
+
+1. https://cran.r-project.org/web/packages/rio/vignettes/rio.html
+2. https://github.com/pbiecek/PISA2012lite
+3. http://fch808.github.io/Data-Analysis-with-R-Exercises.html
+4. http://www.oecd.org/pisa/
+
+This dataset includes 5 plausible values (PV) variables for each math, reading and science.  Each PV was created from possibly imcomplete data.  The PV for each subject is the mean of the data from each set.
+
+```{r}
+student2012 <- import("student2012.rda")
+```
+
+```{r}
+head(student2012)
+```
+
+```{r}
+student_data <- student2012 %>% 
+  mutate(Math = as.numeric((PV1MATH + PV2MATH + PV3MATH + PV4MATH + PV5MATH)/5),
+         Reading = as.numeric((PV1READ + PV2READ + PV3READ + PV4READ + PV5READ)/5),
+         Science = as.numeric((PV1SCIE + PV1SCIE + PV1SCIE + PV1SCIE + PV1SCIE)/5)) %>% 
+  select(Gender = ST04Q01,
+         birth_year = ST03Q02,
+         birth_month = ST03Q01,
+         PC_at_home = ST26Q04,
+         Country = CNT,
+         Math, Reading, Science)
+```
+
+```{r}
+student_scores <- student_data %>% 
+  group_by(Country, Gender) %>% 
+  summarise(math_mean = mean(Math),
+            reading_mean = mean(Reading),
+            science_mean = mean(Science),
+            n = n()) %>% 
+  arrange(math_mean, reading_mean, science_mean)
+```
+
+```{r, fig.width=10, fig.height=6}
+ggplot(student_scores, aes(x = reading_mean, y = math_mean, color = Gender, size=n)) +
+  geom_point() +
+  scale_color_manual(values = c("Female" = "#66FF33", "Male" = "#66CCFF")) +
+  geom_smooth(method = 'loess') +
+  geom_point(data = subset(student_scores,
+                           Country %in% c("United States of America", "Mexico", "Peru", "Qatar",
+                                          "China-Shanghai", "Singapore", "Korea", "Finland", "Chile")),
+             color="#FF6600") +
+  geom_text(data = subset(student_scores,
+                          Country %in% c("United States of America", "Mexico", "Peru", "Qatar",
+                                         "China-Shanghai", "Singapore", "Korea", "Finland", "Chile")),
+            aes(label = Country),
+            color = "black",
+            size = 3,
+            vjust = -0.5) +
+  ylab("Average Math Score") + 
+  xlab("Average Reading Score") + 
+  ggtitle("Average Reading and Math Scores per country, by gender")
+```
+
+```{r}
+with(subset(student_scores, Gender=="Female"), cor.test(math_mean, reading_mean, method = 'pearson'))
+```
+
+```{r}
+with(subset(student_scores, Gender=="Male"), cor.test(math_mean, reading_mean, method = 'pearson'))
+```
+
+```{r}
+student_PC <- student_data %>%
+  group_by(Country, PC_at_home) %>%
+  summarise(mean_math = mean(Math),
+            mean_reading = mean(Reading),
+            mean_science = mean(Science),
+            count = n() ) %>%
+  arrange(mean_math, mean_reading, mean_science)
+
+g1 <- ggplot(subset(student_PC, !(is.na(PC_at_home))), aes(x = mean_reading, fill = PC_at_home, size=count)) +
+  geom_density(alpha=0.66) +
+  scale_fill_manual(values = c("red","blue")) +
+  ylab("Density") + 
+  xlab("Average Reading Score") + 
+  ggtitle("Density Plot of Average Reading Scores with/without a PC at home")
+
+g2 <- ggplot(subset(student_PC, !(is.na(PC_at_home))), aes(x = mean_math, fill = PC_at_home, size=count)) +
+  geom_density(alpha=0.66) +
+  scale_fill_manual(values = c("red","blue")) +
+  ylab("Density") + 
+  xlab("Average Math Score") + 
+  ggtitle("Density Plot of Average Math Scores with/without a PC at home")
+
+g3 <- ggplot(subset(student_PC, !(is.na(PC_at_home))), aes(x = mean_science, fill = PC_at_home, size=count)) +
+  geom_density(alpha=0.66) +
+  scale_fill_manual(values = c("red","blue")) +
+  ylab("Density") + 
+  xlab("Average Science Score") + 
+  ggtitle("Density Plot of Average Science Scores with/without a PC at home")
+
+grid.arrange(g1, g2, g3, ncol=1)
+```
+
+***
+### Lesson 6.16b Quiz: US Educational Finances
+https://www.kaggle.com/noriuk/us-educational-finances
+
+```{r}
+exp_summary <- import("./us-educational-finances/elsect_summary.csv")
+head(exp_summary, 10)
+```
+
+```{r}
+summary(exp_summary)
+```
+
+```{r}
+ggplot(exp_summary, aes(x = YEAR, y = TOTAL_REVENUE)) +
+  geom_point() +
+  geom_smooth(method = 'gam') +
+  geom_point(data = subset(exp_summary, STATE %in% c("California", "New York", "Texas", "Oregon", "Florida")), aes(color = STATE)) +
+  scale_y_continuous(labels = dollar)
+```
+
+```{r}
+with(exp_summary, cor.test(YEAR, TOTAL_REVENUE, method = 'pearson'))
+```
+
+```{r, fig.width=11, fig.height=11}
+ggplot(subset(exp_summary, YEAR > 1992) , aes(x = ENROLL, y = TOTAL_REVENUE)) +
+  geom_point() +
+  geom_smooth(method = 'gam') +
+  geom_point(data = subset(exp_summary, YEAR > 1992 & STATE %in% c("California", "New York", "Texas", "Oregon", "Florida")), aes(color = STATE)) +
+  scale_y_continuous(labels = dollar) +
+  facet_wrap(~YEAR) + 
+  theme(axis.text.x = element_text(angle = 90))
+```
+
+```{r}
+with(subset(exp_summary, YEAR > 1992), cor.test(ENROLL, TOTAL_REVENUE, method = 'pearson'))
+```
+
+```{r, fig.width=11, fig.height=7}
+ggplot(exp_summary, aes(x = FEDERAL_REVENUE, y = STATE_REVENUE)) +
+  geom_point() +
+  geom_smooth(method = 'loess') +
+  geom_point(data = subset(exp_summary, STATE %in% c("California", "New York", "Texas", "Oregon", "Florida")), aes(color = STATE)) +
+  facet_wrap(~YEAR) +
+  scale_x_continuous(labels = dollar) + scale_y_continuous(labels = dollar) + 
+  theme(axis.text.x = element_text(angle = 90))
+```
+
+```{r}
+with(exp_summary, cor.test(FEDERAL_REVENUE, STATE_REVENUE, method = 'pearson'))
+```
+
+```{r, fig.width=11, fig.height=7}
+ggplot(exp_summary, aes(x = TOTAL_EXPENDITURE, y = TOTAL_REVENUE)) +
+  geom_point() +
+  geom_smooth(method = 'loess') +
+  geom_point(data = subset(exp_summary, STATE %in% c("California", "New York", "Texas", "Oregon", "Florida")), aes(color = STATE)) +
+  scale_x_continuous(labels = dollar) + scale_y_continuous(labels = dollar) +
+  facet_wrap(~YEAR) + 
+  theme(axis.text.x = element_text(angle = 90))
+```
+
+```{r}
+with(exp_summary, cor.test(TOTAL_EXPENDITURE, TOTAL_REVENUE, method = 'pearson'))
+```
+
+
+
+
+
+
+
+
+
+
+
+
+

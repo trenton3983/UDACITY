@@ -1,0 +1,40 @@
+"SELECT sql, statement FROM Udacious WHERE queryId = 35;"
+
+Hidden Code Piece 1 of 11: Q
+Hidden Code Piece 2 of 11: U
+Hidden Code Piece 3 of 11: E
+Hidden Code Piece 4 of 11: R
+Hidden Code Piece 5 of 11: I
+Hidden Code Piece 6 of 11: E
+Hidden Code Piece 7 of 11: S
+Hidden Code Piece 8 of 11: R
+Hidden Code Piece 9 of 11: F
+Hidden Code Piece 10 of 11: U
+Hidden Code Piece 11 of 11: N
+
+THAT IS CORRECT!!
+
+
+Here's your first HIDDEN PHRASE.
+
+
+HIDDEN PHRASE 2 of 3:
+
+Table Name:
+Udacious
+
+
+Columns:
+problemSet INTEGER, node INTEGER,  queryId INTEGER, title TEXT, sql TEXT, statement TEXT"
+
+Hidden Code Piece 1 of 9: U
+Hidden Code Piece 2 of 9: D
+Hidden Code Piece 3 of 9: A
+Hidden Code Piece 4 of 9: C
+Hidden Code Piece 5 of 9: I
+Hidden Code Piece 6 of 9: O
+Hidden Code Piece 7 of 9: U
+Hidden Code Piece 8 of 9: S
+Hidden Code Piece 9 of 9: !
+
+HIDDEN MESSAGE #3 = Awesome.db

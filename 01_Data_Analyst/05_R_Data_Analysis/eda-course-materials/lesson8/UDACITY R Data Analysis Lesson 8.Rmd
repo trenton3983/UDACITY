@@ -1,0 +1,340 @@
+---
+title: "UDACITY R Data Analysis Lesson 8"
+author: "Trenton J. McKinney"
+output:
+  html_notebook:
+    toc: true
+    toc_depth: 3
+    theme: "cerulean"
+    fig_width: 9
+---
+
+Resources:
+
+1. https://www.rdocumentation.org/packages/rmarkdown/versions/1.8/topics/html_notebook
+2. http://rmarkdown.rstudio.com/html_document_format.html
+3. https://bootswatch.com/
+
+```{r}
+library(readxl)
+library(tibble)
+library(ggplot2)
+library(dplyr)
+library(scales)
+library(reshape2)
+library(lubridate)
+library(ggthemes)
+library(gridExtra)
+library(alr3)
+library(rio)
+library(GGally)
+```
+
+***
+### Lesson 8: Setup & General
+```{r}
+data('diamonds')
+```
+
+```{r}
+names(diamonds)
+```
+
+***
+### Lesson 8.1 Quiz: Price Histograms with Facet and Color
+1. Create a histogram of diamond prices.
+2. Facet the histogram by diamond color
+3. Use cut to color the histogram bars.
+
+Note: In the link, a color palette of type 'qual' was used to color the histogram  `scale_fill_brewer(type = 'qual')`
+
+[Here's what your plot should look like.](http://i.imgur.com/b5xyrOu.jpg) Note that the plot in the linked image is using log(price) for the x-axis to adjust for positive skew in the data.
+
+```{r}
+ggplot(data = diamonds, aes(x = price, fill = cut)) +
+  geom_histogram(color='black') +
+  facet_wrap(~color) +
+  scale_fill_brewer(type = 'qual') +
+  scale_x_log10(labels = dollar, expression(paste(Log[10], ' of Price'))) +
+  ylab('Count')
+```
+
+***
+### Lesson 8.2 Quiz: Price vs. Table Colored by Cut
+Create a scatterplot of diamond price vs. table and color the points by the cut of the diamond.
+
+The plot should look something like this: http://i.imgur.com/rQF9jQr.jpg
+
+Note: In the link, a color palette of type 'qual' was used to color the scatterplot using `scale_color_brewer(type = 'qual')`
+
+```{r}
+ggplot(data = diamonds, aes(x = table, y = price, color = cut)) +
+  geom_point() +
+  scale_color_brewer(type = 'qual') +
+  scale_y_continuous(labels = dollar, limits = c(0, 20000), breaks = seq(0, 20000, 2000)) +
+  scale_x_continuous(limits = c(40, 100), breaks = seq(40, 100, 3)) +
+  xlab('Table') + ylab('Price')
+```
+
+***
+### Lesson 8.3 Quiz: Typical Table Value
+```{r}
+diamonds %>% 
+  group_by(cut) %>%
+  filter(cut == 'Ideal' | cut == 'Premium') %>% 
+  na.omit() %>% 
+  summarise(Average = mean(table),
+            Std = sd(table),
+            Quartile_1st = quantile(table, 0.25),
+            Quartile_3rd = quantile(table, 0.75),
+            IQR = Quartile_3rd - Quartile_1st)
+```
+
+```{r}
+tapply(diamonds$table, diamonds$cut, summary)
+```
+
+```{r}
+quantile(na.omit(diamonds$table))
+```
+
+***
+### Lesson 8.4 Quiz: Price vs. Volume and Diamond Clarity
+Create a scatterplot of diamond price vs. volume (x * y * z) and color the points by the clarity of diamonds. Use scale on the y-axis to take the log10 of price. You should also omit the top 1% of diamond volumes from the plot.
+
+Note: Volume is a very rough approximation of a diamond's actual volume.
+
+The plot should look something like this: http://i.imgur.com/excUpea.jpg
+
+Note: In the link, a color palette of type 'div' was used to color the scatterplot using scale_color_brewer(type = 'div')
+
+```{r}
+diamonds <- diamonds %>%
+  mutate(volume = x * y * z)
+```
+
+```{r}
+ggplot(data = subset(diamonds, volume <= quantile(volume, 0.99) & volume > 0), aes(x = volume, y = price, color = clarity)) +
+  geom_point() +
+  scale_color_brewer(type = 'div') +
+  scale_y_log10(labels = dollar, expression(paste(Log[10], ' of Price'))) +
+  scale_x_continuous(limits = c(0, 375), breaks = seq(0, 375, 25)) +
+  xlab(bquote('Volume ('~mm^3~')')) +
+  annotation_logticks(sides = 'l')
+```
+
+***
+### Lesson 8.5 Quiz: Proportion of Friendships Initiated
+Many interesting variables are derived from two or more others.  For example, we might wonder how much of a person's network on a service like Facebook the user actively initiated. Two users with the same degree (or number of friends) might be very different if one initiated most of those connections on the service, while the other initiated very few. So it could be useful to consider this proportion of existing friendships that the user initiated. This might be a good predictor of how active a user is compared with their peers, or other traits, such as personality (i.e., is this person an extrovert?).
+
+Your task is to create a new variable called 'prop_initiated' in the Pseudo-Facebook data set. The variable should contain the proportion of friendships that the user initiated.
+
+```{r}
+pf <- import('pseudo_facebook.tsv')
+```
+
+```{r}
+pf$prop_initiated <- ifelse(pf$friend_count > 0, pf$friendships_initiated/pf$friend_count, 0)
+```
+
+```{r}
+summary(pf$prop_initiated)
+```
+
+***
+### Lesson 8.6 Quiz: prop_initiated vs. tenure
+Create a line graph of the median proportion of friendships initiated ('prop_initiated') vs. tenure and color the line segment by year_joined.bucket.
+
+Recall, we created year_joined.bucket in Lesson 7.9, by first creating year_joined from the variable tenure.  Then, we used the cut function on year_joined to create four bins or cohorts of users.
+
+* (2004, 2009]
+* (2009, 2011]
+* (2011, 2012]
+* (2012, 2014]
+
+The plot should look something like this:
+
+* http://i.imgur.com/vNjPtDh.jpg
+* http://i.imgur.com/IBN1ufQ.jpg
+
+```{r}
+pf$year_joined <- floor(2014-(pf$tenure/365))
+pf$year_joined.bucket <- cut(pf$year_joined, breaks = c(2004, 2009, 2011, 2012, 2014))
+```
+
+```{r}
+ggplot(data = subset(pf, tenure > 0 & !is.na(year_joined.bucket)),
+       aes(x = tenure/365, y = prop_initiated)) +
+  geom_line(aes(color =year_joined.bucket), stat = 'summary', fun.y = median) +
+  scale_x_continuous(limits = c(0, 9), breaks = seq(0, 9, 0.5)) +
+  scale_y_continuous(limits = c(0,1)) +
+  ylab('Proportion of Friendships Initiated') +
+  xlab('Tenure (Years)')
+```
+
+***
+### Lesson 8.7 Quiz: Smoothing prop_initiated vs. tenure
+Smooth the last plot you created of of prop_initiated vs tenure colored by year_joined.bucket. You can bin together ranges of tenure or add a smoother to the plot.
+
+There won't be a solution image for this exercise. You will answer some questions about your plot  the next two exercises.
+
+```{r}
+ggplot(data = subset(pf, tenure > 0 & !is.na(year_joined.bucket)), aes(x = tenure/365, y = prop_initiated)) +
+  geom_line(aes(color =year_joined.bucket), stat = 'summary', fun.y = median) +
+  geom_smooth() +
+  scale_x_continuous(limits = c(0, 9), breaks = seq(0, 9, 0.5)) +
+  scale_y_continuous(limits = c(0,1)) +
+  ylab('Proportion of Friendships Initiated') +
+  xlab('Tenure (Years)')
+```
+
+```{r}
+ggplot(data = subset(pf, tenure > 0 & !is.na(year_joined.bucket)), aes(x = tenure/365, y = prop_initiated)) +
+  # geom_line(aes(color =year_joined.bucket), stat = 'summary', fun.y = median) +
+  geom_smooth(aes(color =year_joined.bucket)) +
+  scale_x_continuous(limits = c(0, 9), breaks = seq(0, 9, 0.5)) +
+  scale_y_continuous(limits = c(0,1)) +
+  ylab('Proportion of Friendships Initiated') +
+  xlab('Tenure (Years)')
+```
+
+***
+### Lesson 8.8 Quiz: Greatest prop_initiated Group
+On average, which group initiated the greatest proportion of its Facebook friendships?
+
+__People who joined after 2012__
+
+```{r}
+pf %>% 
+  group_by(year_joined.bucket) %>% 
+  na.omit() %>% 
+  summarise(Average = mean(prop_initiated),
+            Quartile_1 = quantile(prop_initiated, 0.25),
+            Quartile_3 = quantile(prop_initiated, 0.75),
+            n = n())
+```
+
+***
+### Lesson 8.9 Quiz: Largest Group Mean prop_initiated
+For the group with the largest proportion of friendships initiated, what's the groups average (mean) proportion of friendships initiated?
+
+__0.644__
+
+Why do you think this groups proportion of friendships initiated is higher than the others?
+
+__Perhaps this group is younger than the other groups, when they joined, and have a different outlook on meeting people online__
+
+***
+### Lesson 8.10 Quiz: Price/Carat Binned, Faceted, & Colored
+Create a scatter plot of the price/carat ratio of diamonds. The variable x should be assigned to cut. The points should be colored by diamond color, and the plot should be faceted by clarity.
+
+The plot should look something like this:
+
+* http://i.imgur.com/YzbWkHT.jpg.
+
+Note: In the link, a color palette of type 'div' was used to color the histogram using scale_color_brewer(type = 'div')
+
+```{r}
+ggplot(data = diamonds, aes(x = cut, y = price/carat, color = color)) +
+  geom_jitter() +
+  scale_color_brewer(type = 'div') +
+  facet_wrap(~clarity) +
+  scale_y_continuous(labels = dollar) +
+  ylab('Price/Carat') + xlab('Cut') +
+  theme(axis.text.x = element_text(angle = 90))
+```
+
+***
+### Lesson 8.11 Quiz: Gapminder Multivariate Analysis
+The Gapminder website contains over 500 data sets with information about the world's population. Your task is to continue the investigation you did at the end of Problem Set 4 or you can start fresh and choose a different data set from Gapminder.
+
+If you're feeling adventurous or want to try some data munging see if you can find a data set or scrape one from the web.
+
+In your investigation, examine 3 or more variables and create 2-5 plots that make use of the techniques from Lesson 5.
+
+You can find a link to the Gapminder website in the Instructor Notes.
+
+Once you've completed your investigation, create a post in the discussions that includes:
+
+1. The variable(s) you investigated, your observations, and any summary statistics
+2. Snippets of code that created the plots
+3. Links to the images of your plots
+
+Resources:
+
+* https://cran.r-project.org/web/packages/rio/vignettes/rio.html
+* https://github.com/pbiecek/PISA2012lite
+* http://fch808.github.io/Data-Analysis-with-R-Exercises.html
+* http://www.oecd.org/pisa/
+  * https://www.oecd.org/pisa/pisaproducts/PISA%202012%20Technical%20Report_Chapter%2015.pdf
+
+This dataset includes 5 plausible values (PV) variables for each math, reading and science. Each PV was created from possibly imcomplete data. The PV for each subject is the mean of the data from each set.
+
+```{r}
+student2012 <- import('E:/Users/Trenton J. McKinney/PycharmProjects/UDACITY/01_Data_Analyst/05_R_Data_Analysis/eda-course-materials/lesson6/student2012.rda')
+```
+
+```{r}
+performance_band_math <- c(0, 357.8, 420.1, 482.4, 544.7, 607.0, 669.3, 1000)
+```
+
+```{r}
+student_data <- student2012 %>% 
+  mutate(Math = as.numeric((PV1MATH + PV2MATH + PV3MATH + PV4MATH + PV5MATH)/5),
+         Reading = as.numeric((PV1READ + PV2READ + PV3READ + PV4READ + PV5READ)/5),
+         Science = as.numeric((PV1SCIE + PV1SCIE + PV1SCIE + PV1SCIE + PV1SCIE)/5)) %>% 
+  select(Gender = ST04Q01,
+         birth_year = ST03Q02,
+         birth_month = ST03Q01,
+         PC_at_home = ST26Q04,
+         Country = CNT,
+         books_at_home = ST28Q01,
+         at_home_mother = ST11Q01,
+         at_home_father = ST11Q02,
+         mother_job = ST15Q01,
+         mother_schooling = ST13Q01,
+         father_job = ST19Q01,
+         father_schooling = ST17Q01,
+         own_room = ST26Q02,
+         internet = ST26Q06,
+         home_book_count = ST28Q01,
+         computer_count = ST27Q03,
+         first_pc_use = IC03Q01,
+         first_internet_use = IC04Q01,
+         use_internet_at_school = IC05Q01,
+         internet_out_of_sch_wd = IC06Q01,
+         internet_out_of_sch_we = IC07Q01,
+         internet_for_fun = IC08Q06,
+         internet_at_home = IC01Q04,
+         internet_at_school = IC02Q04,
+         Math, Reading, Science)
+```
+
+```{r}
+student_data$math_perf <- cut(student_data$Math, breaks = performance_band_math)
+```
+
+```{r}
+student_scores <- student_data %>% 
+  group_by(Country, Gender) %>% 
+  summarise(math_mean = mean(Math),
+            reading_mean = mean(Reading),
+            science_mean = mean(Science),
+            n = n()) %>% 
+  arrange(math_mean, reading_mean, science_mean)
+```
+
+```{r}
+ggplot(student_data, aes(x = Math, y = Reading, color =  Gender)) +
+  geom_jitter(alpha = 1/20) +
+  geom_smooth(aes(color = Gender))
+```
+
+```{r}
+ggplot(student_data, aes(x = Math)) +
+  geom_histogram(aes(fill = math_perf), color = 'black') +
+  facet_wrap(~Gender) +
+  xlab('Math Scores')
+```
+
+

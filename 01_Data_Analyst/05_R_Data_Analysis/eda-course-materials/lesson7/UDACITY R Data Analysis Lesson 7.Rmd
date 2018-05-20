@@ -1,0 +1,353 @@
+---
+title: "UDACITY R Data Analysis Lesson 7"
+author: "Trenton J. McKinney"
+output:
+  html_notebook:
+    toc: true
+    toc_depth: 3
+    theme: "cerulean"
+    fig_width: 9
+---
+
+Resources:
+
+1. https://www.rdocumentation.org/packages/rmarkdown/versions/1.8/topics/html_notebook
+2. http://rmarkdown.rstudio.com/html_document_format.html
+3. https://bootswatch.com/
+
+```{r}
+library(readxl)
+library(tibble)
+library(ggplot2)
+library(dplyr)
+library(scales)
+library(reshape2)
+library(lubridate)
+library(ggthemes)
+library(gridExtra)
+library(alr3)
+library(rio)
+library(GGally)
+```
+
+***
+### Lesson 7: Setup & General
+```{r}
+pf <- import("pseudo_facebook.tsv", sep = "\t")
+summary(pf$age)
+```
+
+***
+### Lesson 7.3 Quiz: Third Qualitative Variable
+Write code to create a new data frame, called 'pf.fc_by_age_gender', that contains information on each age AND gender group.
+
+The data frame should contain the following variables:
+
+1. mean_friend_count
+2. median_friend_count
+3. n (the number of users in each age and gender grouping)
+```{r}
+ggplot(aes(x = gender, y = age, color = gender), data = subset(pf, !is.na(gender))) +
+  geom_boxplot() +
+  stat_summary(fun.y = mean, geom = "point", shape = 4)
+```
+
+```{r}
+ggplot(aes(x = age, y = friend_count), data = subset(pf, !is.na(gender))) +
+  geom_line(aes(color = gender), stat = "summary", fun.y = median)
+```
+
+```{r}
+pf.fc_by_age_gender <- pf %>% 
+  filter(!is.na(gender)) %>% 
+  group_by(age, gender) %>% 
+  summarise(mean_friend_count = mean(friend_count),
+            median_friend_count = median(friend_count),
+            n = n()) %>% 
+  ungroup() %>% 
+  arrange(age)
+```
+
+```{r}
+head(pf.fc_by_age_gender)
+```
+
+***
+### Lesson 7.4 Quiz: Plotting Conditional Summaries
+Create a line graph showing the median friend count over the ages for each gender. Be sure to the data frame you just created, use pf.fc_by_age_gender.
+```{r}
+ggplot(pf.fc_by_age_gender, aes(x = age, y = median_friend_count)) +
+  geom_line(aes(color = gender))
+```
+
+***
+### Lesson 7.7 Quiz: Reshaping Data
+```{r}
+pf.fc_by_age_gender.wide <- dcast(pf.fc_by_age_gender,
+                                  age ~ gender,
+                                  value.var = 'median_friend_count')
+```
+
+```{r}
+head(pf.fc_by_age_gender.wide)
+```
+
+***
+### Lesson 7.8 Quiz: Ratio Plot
+Plot the ratio of the female to male median friend counts using the data frame pf.fc_by_age_gender.wide.
+
+Think about what geom you should use. Add a horizontal line to the plot with a y intercept of 1, which will be the base line. Look up the documentation for geom_hline to do that. Use the parameter linetype in geom_hline to make the line dashed.
+
+The linetype parameter can take the values 0-6:
+0 = blank, 1 = solid, 2 = dashed, 3 = dotted, 4 = dotdash, 5 = longdash, 6 = twodash
+```{r}
+ggplot(pf.fc_by_age_gender.wide, aes(x = age, y = female/male)) +
+  geom_line(color = 'purple') +
+  geom_hline(yintercept=c(1), color='#0033FF', linetype=2)
+```
+
+***
+### Lesson 7.9 Quiz: Third Quantitative Variable
+Create a variable called year_joined in the pf data frame using the variable tenure and 2014 as the reference year.
+
+The variable year joined should contain the year that a user joined facebook.
+```{r}
+pf$year_joined <- floor(2014-(pf$tenure/365))
+```
+
+```{r}
+summary(pf$year_joined)
+```
+
+***
+### Lesson 7.10 Quiz: Cut a Variable
+Create a new variable in the data frame called year_joined.bucket by using the cut function on the variable year_joined.
+
+You need to create the following buckets for the new variable, year_joined.bucket
+
+        (2004, 2009]
+        (2009, 2011]
+        (2011, 2012]
+        (2012, 2014]
+
+Note that a parenthesis means exclude the year and a bracket means include the year.
+```{r}
+table(pf$year_joined)
+```
+
+```{r}
+pf$year_joined.bucket <- cut(pf$year_joined, breaks = c(2004, 2009, 2011, 2012, 2014))
+```
+
+```{r}
+table(pf$year_joined.bucket)
+```
+
+***
+### Lesson 7.11 Quiz: Plotting It All Together
+Create a line graph of friend_count vs. age so that each year_joined.bucket is a line tracking the median user friend_count across age. This means you should have four different lines on your plot.
+
+You should subset the data to exclude the users whose year_joined.bucket is NA.
+```{r}
+ggplot(aes(x = age, y = friend_count),
+       data = subset(pf, !is.na(year_joined.bucket))) +
+  geom_line(aes(color = year_joined.bucket), stat = 'summary', fun.y = median)
+```
+
+***
+### Lesson 7.12 Quiz: Plot the Grand Mean
+Write code to do the following:
+
+1. Add another geom_line to code below to plot the grand mean of the friend count vs age.
+2. Exclude any users whose year_joined.bucket is NA.
+3. Use a different line type for the grand mean.
+
+As a reminder, the parameter linetype can take the values 0-6:
+0 = blank, 1 = solid, 2 = dashed, 3 = dotted, 4 = dotdash, 5 = longdash, 6 = twodash
+```{r}
+ggplot(aes(x = age, y = friend_count),
+       data = subset(pf, !is.na(year_joined.bucket))) +
+  geom_line(aes(color = year_joined.bucket), stat = 'summary', fun.y = mean) +
+  geom_line(stat = 'summary', fun.y = mean, linetype = 2)
+```
+
+***
+### Lesson 7.13 Quiz: Friending Rate
+```{r}
+with(subset(pf, tenure >= 1), summary(friend_count/tenure))
+```
+
+***
+### Lesson 7.14 Quiz: Friendships Initiated
+Create a line graph of mean of friendships_initiated per day (of tenure) vs. tenure colored by year_joined.bucket.
+
+You need to make use of the variables tenure, friendships_initiated, and year_joined.bucket.
+
+You also need to subset the data to only consider user with at least one day of tenure.
+```{r}
+ggplot(aes(x = tenure, y = friendships_initiated/tenure),
+       data = subset(pf, tenure >= 1)) +
+  geom_line(aes(color = year_joined.bucket), stat = 'summary', fun.y = mean)
+```
+
+***
+### Lesson 7.15 Quiz: Bias Variance Trade off Revisited
+```{r}
+ggplot(aes(x = 7*round(tenure/7), y = friendships_initiated/tenure),
+       data = subset(pf, tenure >= 1)) +
+  geom_line(aes(color = year_joined.bucket), stat = 'summary', fun.y = mean)
+```
+
+Instead of geom_line(), use geom_smooth() to add a smoother to the plot.  You can use the defaults for geom_smooth() but do color the lineby year_joined.bucket
+
+```{r}
+ggplot(aes(x = tenure, y = friendships_initiated/tenure),
+       data = subset(pf, tenure >= 1)) +
+  geom_smooth(aes(color = year_joined.bucket))
+```
+
+***
+### Lesson 7.17: Introducing the Yogurt Dataset
+```{r}
+yo <- import("yogurt.csv")
+yo$id <- factor(yo$id)
+head(yo, 10)
+```
+
+```{r}
+summary(yo)
+```
+
+***
+### Lesson 7.18 Quiz: Histograms Revisited
+```{r}
+ggplot(data = yo, aes(x = price)) +
+  geom_histogram(binwidth = 1, color = 'black', fill = '#BA55D3')
+```
+
+***
+### Lesson 7.19 Quiz: Number of Purchases
+```{r}
+length(unique(yo$price))
+```
+
+```{r}
+table(yo$price)
+```
+
+Create a new variable called all.purchases, which gives the total counts of yogurt for each observation or household.
+
+One way to do this is using the transform function. You can look up the function transform and run the examples of code at the bottom of the documentation to figure out what it does.
+
+The transform function produces a data frame so if you use it then save the result to 'yo'!
+
+OR you can figure out another way to create thevariable.
+```{r}
+yo <- transform(yo, all.purchases = strawberry + blueberry + pina.colada + plain + mixed.berry)
+```
+
+***
+### Lesson 7.20 Quiz: Prices Over Time
+```{r}
+ggplot(data = yo, aes(x = all.purchases)) +
+  geom_histogram(binwidth = 1, color = 'black', fill = '#BA55D3')
+```
+
+Create a scatterplot of price vs time.
+
+This will be an example of a time series plot.
+
+Resolve overplotting issues by using techniques you learned in Lesson 4.
+```{r}
+ggplot(data = yo, aes(x = time, y = price)) +
+  geom_jitter(alpha = 1/4, shape = 21, fill = I('#BA55D3'))
+```
+
+***
+### Lesson 7.22 Quiz: Looking at Samples of Households
+Note: x %in% y returns a logical (boolean) vector the same length as x that says whether each entry in x appears in y. That is, for each entry in x, it checks to see whether it is in y. This allows us to subset the data so we get all the purchases occasions for the households in the sample. Then, we create scatterplots of price vs. time and facet by the sample id. 
+
+Use the pch or shape parameter to specify the symbol when plotting points. Scroll down to 'Plotting Points' on QuickR's Graphical Parameters.
+```{r}
+set.seed(4630)
+sample.ids <- sample(levels(yo$id), 16)
+```
+
+```{r}
+ggplot(data = subset(yo, id %in% sample.ids), aes(x = time, y = price)) +
+  facet_wrap(~id) +
+  geom_line() +
+  geom_point(aes(size = all.purchases, color = all.purchases), pch = 1)
+```
+
+***
+### Lesson 7.25 Quiz: Scatterplot Matrices
+As Dean described, we should let the data speak to determine variables of interest. There's a tool that we can use to create a number of scatter plots automatically. It's called a scatter plot matrix. In a scatter plot matrix. There's a grid of scatter plots between every pair of variables. As we've seen, scatter plots are great, but not necessarily suited for all types of variables. For example, categorical ones. So there are other types of visualizations that can be created instead of scatter plots. Like box plots or histograms when the variables are categorical. Let's produce the scatter plot matrix for our pseudo Facebook data set. We're going to use the GGally package to do so. So make sure you've installed it and then go ahead and load it using the library command. Now, I'm also going to set the theme here too. Now, there's two other things that we want to do. First we want to set the seed so we get reproducible results. Now, you might be wondering why we set the seed in the first place. And it's because we're going to sample from our data set. Our data set contains all these variables and I actually don't want all the variables. I don't want user ID, year joined, or year joined.bucket. So what I can do is subset my data frame and then sample from that sub set. If I check out the variables in my subset data frame these are the ones of interest. Now I didn't use year joined or year joined.bucket, because this one's a categorical variable and really these were derived from tenure. Now I'm ready to use the GG pairs function inside of GGally to create this scatter plot matrix. Now, I've already run this piece of code and I do want to warn you that it takes a long time for this to generate. It might even take over an hour. Feel free to run the command and if its taking a long time for your plot to generate just come back to your computer at another time. We've also included a pdf of the scatter plot in the instructor notes so you can check that out as well. Here's our scatter plot matrix, and notice in the upper part of the matrix we can see the correlation coefficients for the pairs of variables. For age and date of birth year, the correlation is actually negative one. And we can see that on the scatter plot. Sometimes we may want to produce these types of matrices so that way we can produce one number summaries of the different relationships of our variables. This is just like the correlation work that we did in lesson four. So, I've described the plots above the diagonal for the scatter plot matrix, but what do you notice in the lower left of the scatter plot matrix? Write a few sentences about what you see in this next quiz. And pay careful attention to the variable of gender. What types of plots do you think these are?
+
+Here's the [scatterplot matrix](https://s3.amazonaws.com/udacity-hosted-downloads/ud651/scatterplotMatrix.pdf) as a pdf.
+You'll need to run the code `install.packages('GGally')` to install the package for creating this particular scatterplot matrix.
+If the plot takes a long time to render or if you want to see some of the scatterplot matrix, then only examine a smaller number of variables. You can use the following code or select fewer variables. We recommend including gender (the 6th variable)!
+`pf_subset = pf[, c('age', 'dob_year', 'dob_month', 'gender', 'tenure')]`
+You can also select a subset using the `subset()` function and the "select" argument:
+`pf_subset <- subset(pf, select = -c(userid, year_joined, year_joined_bucket))`
+The - sign in the "select" value indicates all but the listed columns.
+You may find in your matrix that variable labels are on the outer edges of the scatterplot matrix, rather than on the diagonal. If you want labels in the diagonal, you can set the `axisLabels = 'internal'` argument in your ggpairs command.
+
+The GG pairs function uses a different plot type for different types of combinations of variables. Hence, we have histograms here and we have scatter plots here. Many of these plots aren't quite as nice as they would be if we fine-tuned them for the particular variables. For example, for all the counts of likes, we might want to work on a logarithmic scale. But, GG Pairs doesn't do this for us. At the very least, a scatter plot matrix can be a useful starting point in many analyses.
+
+```{r}
+set.seed(1836)
+pf_subset <- pf[, c(2:15)]
+names(pf_subset)
+```
+```{r, fig.width=20, fig.height=20, results='hide', warning=FALSE, message=FALSE}
+ggpairs(pf_subset[sample.int(nrow(pf_subset), 1000), ], ggplot2::aes(color=gender))
+```
+
+```{r, fig.width=20, fig.height=20, results='hide', warning=FALSE, message=FALSE}
+ggpairs(pf_subset[sample.int(nrow(pf_subset), 1000), ])
+```
+
+***
+### Lesson 7.26: Even More Variables
+A matrix such as this one will be extremely helpful when we have even more variables than those in the pseudo-Facebook data set. Examples arise in many areas, but one that has attracted the attention of statisticians is genomic data. In these data sets, they're often thousands of genetic measurements for each of a small number of samples. In some cases, some of these samples have a disease, and so we'd like to identify genes that are associated with the disease. In the instructor notes, you'll find a data set of gene expression in tumors. The data contains the expression of 6,830 genes, compared with a larger baseline reference sample. Now, this is a ton of data. So let's go ahead and read in the data set, and then I'll change the color names of the data set to be the numbers from one to 64. Now, I'm just doing this so that way the plot that I create is going to be a little bit nicer with the labeling on the x axis.
+
+```{r}
+nci <- read.table('nci.tsv')
+```
+
+```{r}
+colnames(nci) <- c(1:64)
+```
+
+```{r}
+names(nci)
+```
+
+***
+### Lesson 7.27: Heat Maps
+The last plot that we'll make for this course is called a Heat Map. For our data set we want to display each combination of gene and sample case, the difference in gene expression and the sample from the base line. We want to display combinations where a gene is over expressed in red. in combinations where it is under expressed in blue. Here's the code to make that Heat Map. First, we'll run all of this in order to melt our data to a long format. And then we just run our ggplot code using the geom, geom tile. Now, this last line is going to give us a scale gradient. And we're going to use the colors from blue to red. So, let's see what the output looks like. And, there's our Heat Map. Even with such a dense display, we aren't looking at all the data. In particular, we're just showing the first 200 genes. That's 200 genes of over Genomic data sets of these kind, sometimes called micro data are only getting larger, and more complex. What's most interesting, is that other data sets also look like this. For example, internet companies run lots of randomized experiments. Where in the simplest versions, users are randomly assigned to a treatment like a new version of a website or some sort of new feature or product or a control condition. Then the difference in outcome between the treatment and control can be computed for a number of metrics of interest. In many situations, there might have been hundreds or thousands of experiments and hundreds of metrics. This data looks very similar to the genomic data in some ways. And this is why the useful maxim plot all the data might not always apply to a data set as it did to most of this course.
+
+```{r}
+?melt
+```
+
+```{r}
+nci.long.samp <- melt(as.matrix(nci[1:200, ]))
+names(nci.long.samp) <- c('gene', 'case', 'value')
+head(nci.long.samp)
+```
+
+```{r}
+ggplot(data = nci.long.samp, aes(y = gene, x = case, fill = value)) +
+  geom_tile() +
+  scale_fill_gradientn(colors = colorRampPalette(c('blue', 'red'))(100))
+```
+
+
+
+
+
+
+
+

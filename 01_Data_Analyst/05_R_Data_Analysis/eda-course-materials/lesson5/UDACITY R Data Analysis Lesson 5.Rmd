@@ -1,0 +1,564 @@
+---
+title: "UDACITY R Data Analysis Lesson 5"
+author: "Trenton J. McKinney"
+output:
+  html_notebook:
+    toc: true
+    toc_depth: 3
+    theme: "cerulean"
+    fig_width: 8
+---
+
+Resources:
+
+1. https://www.rdocumentation.org/packages/rmarkdown/versions/1.8/topics/html_notebook
+2. http://rmarkdown.rstudio.com/html_document_format.html
+3. https://bootswatch.com/
+
+```{r}
+library(readxl)
+library(tibble)
+library(ggplot2)
+library(dplyr)
+library(scales)
+library(reshape2)
+library(lubridate)
+library(ggthemes)
+library(gridExtra)
+library(alr3)
+```
+
+***
+### Lesson 5: Setup & General
+```{r}
+pf <- read.csv("pseudo_facebook.tsv", sep = "\t")
+```
+
+```{r}
+summary(pf$age)
+```
+
+***
+### Lesson 5.3: Scatterplots
+```{r}
+qplot(x = age, y = friend_count, data = pf)
+```
+
+***
+### Lesson 5.4: ggplot Syntax
+```{r}
+p_pf <- ggplot(aes(x = age, y = friend_count, color = age), data = pf)
+```
+
+```{r, fig.width=9}
+p_pf +
+  geom_point() +
+  scale_x_continuous(limits = c(10, 115), breaks = seq(10, 115, 5)) +
+  xlab("Age (years)") + ylab("Friend Count")
+```
+
+```{r}
+p_pf +
+  geom_point() +
+  xlim(13, 90) +
+  xlab("Age (years)") + ylab("Friend Count")
+```
+
+***
+### Lesson 5.5: Quiz: Overplotting
+```{r}
+p_pf +
+  geom_point(alpha = 1/20) +
+  xlim(13, 90)
+```
+
+```{r}
+p_pf +
+  geom_jitter(alpha = 1/20) +
+  xlim(13, 90)
+```
+
+***
+### Lesson 5.6: Quiz: coord_trans
+```{r}
+p_pf +
+  geom_point(alpha = 1/20, position = position_jitter(h = 0)) +
+  xlim(13, 90) +
+  coord_trans(y = "sqrt")
+```
+
+***
+### Lesson 5.7: Quiz: Alpha and Jitter
+
+Examine the relationship between friendships_initiated (y) and age (x) using the ggplot syntax.
+
+We recommend creating a basic scatter plot first to see what the distribution looks like and then adjusting it by adding one layer at a time.
+
+What are your observations about your final plot?
+
+Remember to make adjustments to the breaks of the x-axis and to use apply alpha and jitter.
+```{r}
+p_pf_f_init <- ggplot(data = pf, aes(x = age, y = friendships_initiated, color=age)) +
+  scale_color_gradientn(colors = rainbow(21)) +
+  ylab("Friendships Initiated") + xlab("Age") +
+  scale_x_continuous(limits = c(13, 90), breaks = seq(10, 90, 5)) +
+  scale_y_continuous(breaks = seq(0, 4000, 200))
+```
+
+```{r}
+p_pf_f_init +
+  geom_point(show.legend = FALSE)
+```
+
+```{r}
+p_pf_f_init +
+  geom_point(alpha = 1/20, position = position_jitter(h = 0), show.legend = FALSE)
+```
+
+```{r}
+p_pf_f_init +
+  geom_point(alpha = 1/20, show.legend = FALSE) +
+  coord_trans(y = "sqrt") +
+  geom_smooth()
+```
+
+```{r}
+print("Age 13 to 26")
+summary((filter(pf, age<26, age>13))$friendships_initiated)
+print("Age 27 to 50")
+summary((filter(pf, age<50, age>27))$friendships_initiated)
+print("Age 51 to 75")
+summary((filter(pf, age<75, age>51))$friendships_initiated)
+print("Age 75 to 90")
+summary((filter(pf, age<90, age>71))$friendships_initiated)
+```
+
+***
+### Lesson 5.9: Quiz: Conditional Means - dplyr
+```{r}
+age_groups <- group_by(pf, age)
+pf.fc_by_age <- summarise(age_groups,
+          fc_mean = mean(friend_count),
+          fc_median = median(friend_count),
+          n = n()
+          )
+pf.fc_by_age
+```
+
+```{r}
+# Performs the same operation as the previous code cell
+pf.fc_by_age <- pf %>% 
+  group_by(age) %>% 
+  summarise(fc_mean = mean(friend_count),
+            fc_median = median(friend_count),
+            n = n())
+pf.fc_by_age
+```
+
+Plot mean friend count vs. age using a line graph.  Be sure you use the correct variable names and the correct data frame. You should be working with the new data frame created from the dplyr functions. The data frame is called 'pf.fc_by_age'.
+
+Use geom_line() rather than geom_point to create the plot. You can look up the documentation for geom_line() to see what it does.
+
+```{r}
+p_pf_mean_fc <- ggplot(data = pf.fc_by_age, aes(x = age, y = fc_mean, color = age)) +
+  geom_point(show.legend = FALSE) +
+  scale_color_gradientn(colors = rainbow(21)) +
+  ylab("Friend Count Mean") + xlab("Age") +
+  scale_x_continuous(limits = c(13, 90), breaks = seq(10, 90, 5)) +
+  scale_y_continuous(limits = c(75, 425), breaks = seq(75, 425, 25)) +
+  geom_hline(yintercept=100, color='#0033FF', linetype=3)
+``` 
+
+```{r}
+p_pf_mean_fc
+```
+
+```{r}
+p_pf_mean_fc +
+  geom_line(show.legend = FALSE)
+```
+
+***
+### Lesson 5.10: Quiz: Overlaying Summaries with Raw Data
+```{r}
+p_pf_overlay <- p_pf +
+  geom_point(alpha = 1/20, position = position_jitter(h = 0), show.legend = FALSE) +
+  scale_x_continuous(limits = c(13, 90), breaks = seq(10, 90, 5)) +
+  xlab("Age (years)") + ylab("Friend Count") +
+  coord_trans(y = "sqrt") +
+  geom_line(stat = "summary", fun.y = mean, color="#CC3399") +
+  geom_line(stat = "summary", fun.y = quantile, fun.args = list(probs = 1/10), linetype = 2, color="#FF9900", size = 1) +
+  geom_line(stat = "summary", fun.y = quantile, fun.args = list(probs = 1/2), color="red") +
+  geom_line(stat = "summary", fun.y = quantile, fun.args = list(probs = 9/10), linetype = 2, color="#FF9900", size = 1)
+
+p_pf_overlay
+```
+
+```{r}
+p_pf_overlay +
+  coord_cartesian(xlim = c(13, 30), ylim = c(0,1000))
+```
+
+```{r}
+p_pf_overlay +
+  coord_cartesian(xlim = c(60, 90), ylim = c(0,1000))
+```
+
+***
+### Lesson 5.12: Quiz: Correlation
+```{r}
+cor.test(pf$age, pf$friend_count, method = "pearson")
+```
+
+```{r}
+with(pf, cor.test(age, friend_count, method = "pearson"))
+```
+
+***
+### Lesson 5.13: Quiz: Correlation on Subsets
+```{r}
+with(subset(pf, age <= 30), cor.test(age, friend_count, method = "pearson"))
+```
+
+***
+### Lesson 5.15: Quiz: Create Scatterplots
+Create a scatterplot of likes_received (y) vs. www_likes_received (x). Use any of the techniques that you've learned so far to modify the plot.
+```{r}
+p_pf_likes <- ggplot(data = pf, aes(x = www_likes_received, y = likes_received)) +
+  geom_point(aes(color=www_likes_received), show.legend = FALSE)
+
+p_pf_likes
+```
+
+```{r}
+ p_pf_likes +
+  scale_x_log10()
+```
+
+Resourses:
+
+1. http://ggplot2.tidyverse.org/reference/annotation_logticks.html
+
+```{r}
+p_pf_likes + 
+  scale_x_log10() + scale_y_log10() +
+  annotation_logticks()
+```
+
+***
+### Lesson 5.16: Quiz: Strong Correlations
+```{r}
+p_pf_likes + 
+  xlim(0, quantile(pf$www_likes_received, 0.95)) +
+  ylim(0, quantile(pf$likes_received, 0.95))
+```
+
+```{r}
+p_pf_likes + 
+  xlim(0, quantile(pf$www_likes_received, 0.95)) +
+  ylim(0, quantile(pf$likes_received, 0.95)) +
+  geom_smooth(method = "lm", color = "red", size = 1)
+```
+
+```{r}
+with(pf, cor.test(www_likes_received, likes_received, method = "pearson"))
+```
+
+***
+### Lesson 5.18: Quiz: More Caution with Correlation
+Create a scatterplot of temperature (Temp) vs. months (Month).
+```{r}
+data("Mitchell")
+?Mitchell
+```
+
+```{r, fig.width=10}
+p_Mitchell <- ggplot(data = Mitchell, aes(y = Temp, x = Month, color = Month)) +
+  geom_point(show.legend = FALSE) +
+  ylab("Temperature (C)") + xlab("Month") +
+  geom_line(show.legend = FALSE, color = "red")
+
+p_Mitchell
+```
+
+```{r}
+months <- c('January',
+          'February',
+          'March',
+          'April',
+          'May',
+          'June',
+          'July',
+          'August',
+          'September',
+          'October',
+          'November',
+          'December')
+
+years <- c(1976, 1977, 1978, 1979, 1980,
+         1981, 1982, 1983, 1984, 1985,
+         1986, 1987, 1988, 1989, 1990,
+         1991, 1992)
+
+y_m <- c()
+my_year <- c()
+my_month <- c()
+
+for(i in years){
+  for(j in months){
+    
+    y_m <- c(y_m, paste(i,j, sep = ", "))
+    my_year <- c(my_year, i)
+    my_month <- c(my_month, j)
+
+  }
+}
+
+```
+
+```{r}
+my_mitchell <- Mitchell
+
+my_mitchell["Month_Name"] <- my_month
+my_mitchell["Year"] <- my_year
+
+my_mitchell$Month_Name <- factor(my_mitchell$Month_Name,
+                                 levels = months,
+                                 ordered = TRUE)
+```
+
+```{r}
+my_month_num <- match(my_month, month.name)
+my_mitchell["Month_Num"] <- my_month_num
+```
+
+```{r, fig.width=10}
+p_Mitchell_2 <- ggplot(data = my_mitchell, aes(y = Temp, x = Month_Name, color = Year)) +
+  geom_point(show.legend = TRUE) +
+  ylab("Temperature (C)") + xlab("Month") +
+  scale_color_gradient(low='#05D9F6', high='#5011D1')
+
+p_Mitchell_2
+```
+
+Resource:
+
+1. https://www.hexcolortool.com/#9580ff
+
+```{r, fig.height=7, fig.width=9}
+ggplot(data = my_mitchell, aes(y = Temp, x = Month_Name, color = factor(Year))) +
+  geom_point(show.legend = TRUE) +
+  ylab("Temperature (C)") + xlab("Month") +
+  scale_color_manual(values = c("1976" = "#E1CCFF", "1977" = "#D4BFFF", "1978" = "#C8B3FF", "1979" = "#BAA5FF",
+                                "1980" = "#AE99FF", "1981" = "#A18CFF", "1982" = "#947FFF", "1983" = "#8873FF",
+                                "1984" = "#7B66FF", "1985" = "#6E59FF", "1986" = "#624DFF", "1987" = "#5540FF",
+                                "1988" = "#4833FF", "1989" = "#3B26FF", "1990" = "#2F1AFF", "1991" = "#220DFF",
+                                "1992" = "#1500FF")) +
+  scale_y_continuous(limits = c(-8, 28), breaks = seq(-8, 28, 1)) +
+  geom_hline(yintercept = seq(-8, 28, 1), color = 'blue', linetype = 3)
+```
+
+```{r, fig.width=9, fig.height=10}
+ggplot(data = my_mitchell, aes(y = Temp, x = Month_Name, color = Temp)) +
+  geom_point(show.legend = FALSE) +
+  ylab("Temperature (C)") + xlab("Month") +
+  facet_wrap(~Year) + 
+  theme(axis.text.x = element_text(angle = 90)) +
+  scale_y_continuous(limits = c(-8, 28), breaks = seq(-8, 28, 4)) +
+  geom_hline(yintercept = seq(-8, 28, 4), color = 'blue', linetype = 3) +
+  scale_color_gradient(low = "blue", high = "red")
+```
+
+```{r}
+summary(my_mitchell$Temp)
+```
+
+```{r}
+my_mitchell %>%
+  group_by(Year) %>%
+  summarise(min(Temp),
+            max(Temp),
+            mean(Temp))
+```
+
+```{r}
+subset(my_mitchell, Temp == max(Temp))
+```
+
+```{r}
+subset(my_mitchell, Temp == min(Temp))
+```
+
+```{r}
+my_mitchell %>%
+  summarise(min(Temp),
+            max(Temp),
+            mean(Temp))
+```
+
+```{r}
+my_mitchell %>%
+  group_by(Month_Name) %>%
+  summarise(min(Temp),
+            max(Temp),
+            mean(Temp))
+```
+
+***
+### Lesson 5.19: Quiz: Noisy Scatterplots
+```{r}
+with(my_mitchell, cor.test(Month, Temp, method = "pearson"))
+```
+
+***
+### Lesson 5.20: Quiz: Making Sense of Data
+```{r}
+ggplot(data = my_mitchell, aes(y = Temp, x = Month_Num, color = Year)) +
+  geom_point(show.legend = TRUE) +
+  scale_x_continuous(breaks = seq(1, 12, 1))
+```
+
+```{r}
+with(my_mitchell, cor.test(Month_Num, Temp, method = "pearson"))
+```
+
+```{r}
+#Udacity Instructor method
+ggplot(data = Mitchell, aes(y = Temp, x = Month%%12)) +
+  geom_point(show.legend = TRUE) +
+  scale_x_continuous(breaks = seq(0, 203, 12))
+```
+
+***
+### Lesson 5.21: Quiz: A New Perspective
+```{r, fig.width=10}
+ggplot(data = Mitchell, aes(y = Temp, x = Month)) +
+  geom_point() +
+  scale_x_discrete(breaks = seq(0, 203, 12))
+```
+
+***
+### Lesson 5.22: Quiz: Understanding Noise: Age to Age Months
+Create a new variable, 'age_with_months', in the 'pf' data frame.  Be sure to save the variable in the data frame rather than creating a separate, stand-alone variable. You will need to use the variables 'age' and 'dob_month' to create the variable 'age_with_months'.
+
+Assume the reference date for calculating age is December 31, 2013.
+
+This programming assignment WILL BE automatically graded. For this exercise, you need only create the 'age_with_months' variable; no further processing of the data frame is necessary.
+```{r}
+pf <- read.csv("pseudo_facebook.tsv", sep = "\t")
+```
+
+```{r}
+# either option below is acceptable
+# pf$age_with_months <- pf$age + (1 - dob_month/12)
+pf$age_with_months <- with(pf, age + 1 - dob_month/12)
+```
+
+***
+### Lesson 5.23: Quiz: Age with Months Means
+Create a new data frame called pf.fc_by_age_months that contains the mean friend count, the median friend count, and the number of users in each group of age_with_months. The rows of the data framed should be arranged in increasing order by the age_with_months variable.
+
+For example, the first two rows of the resulting data frame would look something like...
+
+age_with_months  friend_count_mean	friend_count_median	n
+            13            275.0000                   275 2
+      13.25000            133.2000                   101 11
+
+#### Solution
+```{r}
+pf.fc_by_age_months <- pf %>% 
+  group_by(age_with_months) %>% 
+  summarise(friend_count_mean = mean(friend_count),
+            friend_count_median = median(friend_count),
+            n = n()) %>% 
+  arrange(age_with_months)
+
+head(pf.fc_by_age_months)
+```
+
+#### Alternate Solution
+```{r}
+age_with_months_groups <- group_by(pf, age_with_months)
+pf.fc_by_age_months2 <- summarise(age_with_months_groups,
+                                  friend_count_mean = mean(friend_count),
+                                  friend_count_median = median(friend_count),
+                                  n = n())
+pf.fc_by_age_months2 <- arrange(pf.fc_by_age_months2, age_with_months)
+```
+
+***
+### Lesson 5.24: Quiz: Noise in Conditional Means
+Create a new line plot showing friend_count_mean versus the new variable, age_with_months. Be sure to use the correct data frame (the one you created in the last exercise) AND subset the data to investigate users with ages less than 71.
+
+```{r}
+summary(subset(pf.fc_by_age_months, age_with_months < 71))
+```
+
+```{r}
+p_pf_age_months <- ggplot(subset(pf.fc_by_age_months, age_with_months < 71),
+                          aes(x = age_with_months, y = friend_count_mean, color = age_with_months)) +
+  geom_line(show.legend = FALSE) +
+  scale_color_gradientn(colors = rainbow(21)) +
+  ylab("Friend Count Mean") + xlab("Age with Months") +
+  scale_x_continuous(limits = c(13, 71), breaks = seq(10, 75, 5)) +
+  scale_y_continuous(limits = c(45, 425), breaks = seq(50, 425, 25)) +
+  geom_hline(yintercept=c(146.51, 421.60, 46.33, 94.25, 161.07), color='#0033FF', linetype=3) +
+  geom_vline(xintercept=c(13, 71), color='#0033FF', linetype=3)
+
+p_pf_age_months
+```
+
+```{r}
+#add rows with same names as pf.fc_by_age_months
+pf.fc_by_age$age_with_months <- pf.fc_by_age$age
+pf.fc_by_age$friend_count_mean <- pf.fc_by_age$fc_mean
+```
+
+```{r, fig.width=9}
+ggplot(subset(pf.fc_by_age_months, age_with_months < 71), aes(x = age_with_months, y = friend_count_mean, color = "FC by Age Months")) +
+  geom_line(show.legend = TRUE) +
+  ylab("Friend Count Mean") + xlab("Age with Months") +
+  scale_x_continuous(limits = c(13, 71), breaks = seq(10, 75, 5)) +
+  scale_y_continuous(limits = c(45, 425), breaks = seq(50, 425, 25)) +
+  geom_hline(yintercept=c(146.51, 421.60, 46.33, 94.25, 161.07), color='#0033FF', linetype=3) +
+  geom_vline(xintercept=c(13, 71), color='#0033FF', linetype=3) + 
+  geom_line(data = pf.fc_by_age, aes(x = age_with_months, y = friend_count_mean, color="FC by Age"), show.legend = FALSE) +
+  scale_color_manual(values = c("FC by Age" = "black", "FC by Age Months" = "#FF6600"))
+```
+
+***
+### Lesson 5.25: Smoothing Conditional Means
+```{r}
+p1 <- ggplot(aes(x = age, y = friend_count_mean), data = subset(pf.fc_by_age, age < 71)) +
+  geom_line() +
+  geom_smooth()
+
+p2 <- ggplot(aes(x = age_with_months, y = friend_count_mean), data = subset(pf.fc_by_age_months, age_with_months < 71)) +
+  geom_line() +
+  geom_smooth()
+
+p3 <- ggplot(aes(x = round(age /5) * 5, y = friend_count), data = subset(pf, age < 71)) +
+  geom_line(stat = "summary", fun.y = mean)
+
+grid.arrange(p2, p1, p3, ncol = 1)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,612 @@
+---
+title: "UDACITY R Data Analysis Lesson 4"
+author: "Trenton J. McKinney"
+output:
+  html_notebook:
+    toc: true
+    toc_depth: 3
+    theme: "cerulean"
+    fig_width: 7
+---
+
+Resources:
+
+1. https://www.rdocumentation.org/packages/rmarkdown/versions/1.8/topics/html_notebook
+2. http://rmarkdown.rstudio.com/html_document_format.html
+3. https://bootswatch.com/
+
+```{r}
+library(readxl)
+library(tibble)
+library(ggplot2)
+library(dplyr)
+library(scales)
+library(reshape2)
+library(lubridate)
+library(ggthemes)
+library(gridExtra)
+```
+
+***
+### Lesson 4.1: Quiz: Diamonds
+```{r}
+data("diamonds")
+summary(diamonds)
+```
+
+```{r}
+is.factor(diamonds$carat)
+is.factor(diamonds$cut)
+is.factor(diamonds$color)
+is.factor(diamonds$clarity)
+is.factor(diamonds$depth)
+is.factor(diamonds$table)
+is.factor(diamonds$price)
+is.factor(diamonds$x)
+is.factor(diamonds$y)
+is.factor(diamonds$z)
+```
+
+```{r}
+diamonds$color
+```
+
+```{r}
+?diamonds
+```
+
+***
+### Lesson 4.2: Quiz: Price Histogram
+```{r}
+hist(diamonds$price)
+p_hist = ggplot(aes(x = price), data = diamonds) +
+  geom_histogram(binwidth = 400, color = 'black', fill = '#BA55D3')
+p_hist + scale_x_continuous(limits = c(0, 20000))
+```
+
+```{r}
+par(mfrow=c(2,4), las=1, mar=c(5,5,4,1)) 
+
+colors = unique(diamonds$color)
+
+for (i in 1:length(colors)) {
+  
+  color_price = subset(diamonds, color==colors[i])
+  
+  hist(color_price$price, main = colors[i], xlim = c(0, 20000),
+       xlab='price($)', border = 'black', col = '#BA55D3')
+  
+}
+```
+
+```{r}
+p_hist = ggplot(aes(x = price), data = diamonds) +
+  geom_histogram(binwidth = 400, color = 'black', fill = '#BA55D3')
+p_hist + scale_x_continuous(limits = c(0, 20000)) +
+  facet_wrap(~color)
+```
+
+***
+### Lesson 4.3: Quiz: Price Histogram Summary
+```{r}
+summary(diamonds$price)
+```
+
+***
+### Lesson 4.4: Quiz: Diamond Counts
+```{r}
+sum(diamonds$price < 500)
+sum(diamonds$price < 250)
+sum(diamonds$price > 15000)
+sum(diamonds$price < 15000)
+53940 - sum(diamonds$price < 15000)
+```
+
+***
+### Lesson 4.5: Quiz: Cheaper Diamonds
+```{r}
+#histogram of entire dataset
+print(ggplot(aes(x = price), data = diamonds) +
+  geom_histogram(binwidth = 400, color = 'black', fill = '#BA55D3') +
+  scale_x_continuous(limits = c(0, 20000)))
+```
+
+```{r}
+#histogram of dataset for prices from $329 to $2500 with binwidth stepping from 50 to 500 by 25
+for (i in seq(50, 500, 25)) {
+  
+  print(ggplot(aes(x = price), data = diamonds) +
+    geom_histogram(binwidth = i, color = 'black', fill = '#BA55D3') +
+    scale_x_continuous(limits = c(329, 2500)) + ggtitle(paste0('Binwidth = ', i)))
+}
+```
+
+
+***
+### Lesson 4.6: Quiz: Price by Cut Histograms
+```{r}
+p_hist = ggplot(aes(x = price), data = diamonds) +
+  geom_histogram(binwidth = 400, color = 'black', fill = '#BA55D3') +
+  theme(axis.text.x = element_text(angle = 90))
+p_hist + scale_x_continuous(labels = dollar, limits = c(0, 20000), breaks = seq(0, 20000, 2000)) +
+  facet_wrap(~cut)
+```
+
+***
+### Lesson 4.7: Quiz: Price by Cut
+```{r}
+"Gives count of diamonds by cut"
+table(diamonds$cut)
+```
+
+```{r}
+# by(diamonds$price, diamonds$cut, summary)
+# by(diamonds$price, diamonds$cut, max)
+# by(diamonds$price, diamonds$cut, min)
+# by(diamonds$price, diamonds$cut, median)
+```
+
+```{r}
+diamonds %>%
+  group_by(cut) %>%
+  summarise(max_price = max(price),
+            min_price = min(price),
+            median_price = median(price))
+```
+
+***
+### Lesson 4.8: Quiz: Scales and Multiple Histograms
+```{r}
+p_hist = ggplot(aes(x = price), data = diamonds) +
+  geom_histogram(binwidth = 400, color = 'black', fill = '#BA55D3') +
+  theme(axis.text.x = element_text(angle = 90))
+p_hist + scale_x_continuous(limits = c(0, 20000)) +
+  facet_wrap(~cut, scales="free_y")
+```
+
+***
+### Lesson 4.9: Quiz: Price Per Carat by Cut
+```{r}
+"Determine the vaules of cuts and print them"
+unique_carat = unique(diamonds$carat)
+print(unique_carat)
+"Print the number of cuts"
+length(unique_carat)
+```
+
+#### For each Carat -> histogram of price with facet_wrap of cut
+```{r}
+par(mfrow=c(2,4), las=1, mar=c(5,5,4,1)) 
+
+carats = unique(diamonds$carat)
+
+for (i in 1:length(carats)) {
+  
+  carat_price = subset(diamonds, carat==carats[i])
+  
+  print(
+  ggplot(aes(x = price), data = carat_price) + 
+    geom_histogram(binwidth = 400, color = 'black', fill = '#BA55D3') +
+    scale_x_continuous(limits = c(0, 20000)) + facet_wrap(~cut, scales="free") + 
+    ggtitle(paste0('Carat = ', i)))
+}
+```
+
+#### Histogram of Price/Carat of diamonds with a Log10 x scale and Facet_wrap for cut
+```{r}
+p_hist = ggplot(aes(x = price/carat), data = diamonds) + 
+
+  geom_histogram(binwidth = 0.05, color = 'black', fill = '#BA55D3') +
+  scale_x_log10(expression(paste(Log[10], " of Price")),
+                breaks = trans_breaks("log10", function(x) 10^x),
+                labels = trans_format("log10", math_format(10^.x))) + 
+  facet_wrap(~cut, scales="free_y") 
+
+p_hist
+```
+
+#### Original Histogram of Price
+```{r}
+ggplot(aes(x = price), data = diamonds) + 
+  geom_histogram(binwidth = 400, color = 'black', fill = '#BA55D3')
+```
+
+#### Histogram of Price/Carat
+```{r}
+ggplot(aes(x = price/carat), data = diamonds) + 
+  geom_histogram(binwidth = 400, color = 'black', fill = '#BA55D3')
+```
+
+***
+### Lesson 4.10: Quiz: Price Box Plots
+
+```{r}
+p_cut = ggplot(diamonds, aes(x = cut, y = price)) +
+  geom_boxplot(fill = '#BA55D3', color = 'black') +
+  scale_y_continuous(limits = c(0, 10000))
+p_clarity = ggplot(diamonds, aes(x = clarity, y = price)) +
+  geom_boxplot(fill = '#BA55D3', color = 'black') +
+  scale_y_continuous(limits = c(0, 10000))
+p_color = ggplot(diamonds, aes(x = color, y = price)) +
+  geom_boxplot(fill = 'green', color = 'black') +
+  scale_y_continuous(limits = c(0, 10000))
+
+grid.arrange(p_cut, p_clarity, p_color, ncol = 1)
+```
+
+```{r}
+ggplot(diamonds, aes(x = cut, y = price)) +
+  geom_boxplot(aes(fill = clarity)) +
+  scale_y_continuous(limits = c(0, 10000))
+```
+
+```{r}
+ggplot(diamonds, aes(x = clarity, y = price, color = cut)) + 
+  geom_boxplot() + 
+  facet_grid(color~., margins = TRUE) 
+```
+
+***
+### Lesson 4.11: Quiz: Interquartile Range - IQR
+```{r}
+IQR(subset(diamonds, color=='J')$price)
+IQR(subset(diamonds, color=='D')$price)
+```
+
+```{r}
+diamonds %>%
+  group_by(color) %>%
+  filter(color == "D") %>%
+  summarise(Quartile_1st = quantile(price, 0.25),
+            Quartile_3rd = quantile(price, 0.75),
+            IQR = Quartile_3rd - Quartile_1st)
+```
+
+```{r}
+diamonds %>%
+  group_by(color) %>%
+  filter(color == "J") %>%
+  summarise(Quartile.25 = quantile(price, 0.25),
+            Quartile.75 = quantile(price, 0.75),
+            IQR = Quartile.75 - Quartile.25)
+```
+
+***
+### Lesson 4.12: Quiz: Price/Carat Box Plots by Color
+
+```{r, fig.height=8}
+
+p_cut = ggplot(diamonds, aes(x = cut, y = price/carat)) +
+  geom_boxplot(fill = '#BA55D3', color = 'black') +
+  scale_y_continuous(limits = c(1000, 6000), breaks = seq(1000, 6000, 1000), labels=dollar)
+
+p_clarity = ggplot(diamonds, aes(x = clarity, y = price/carat)) +
+  geom_boxplot(fill = 'blue', color = 'black') +
+  scale_y_continuous(limits = c(1000, 6000), breaks = seq(1000, 6000, 1000), labels=dollar)
+
+p_color = ggplot(diamonds, aes(x = color, y = price/carat)) +
+  geom_boxplot(aes(fill = color)) +
+  scale_y_continuous(limits = c(1000, 6000), breaks = seq(1000, 6000, 1000), labels=dollar) +
+  theme(legend.position = 'none')
+
+grid.arrange(p_cut, p_clarity, p_color, ncol = 1)
+```
+
+```{r}
+ggplot(diamonds, aes(x = color, y = price/carat)) +
+  geom_boxplot(aes(fill=color)) +
+  scale_y_continuous(limits = c(0, 10000))
+```
+
+***
+### Lesson 4.13: Quiz: Carat Frequency Polygon
+```{r}
+ggplot(data = diamonds, aes(x=carat)) +
+  geom_freqpoly(binwidth = .01, color = 'purple') +
+  scale_x_continuous(limits = c(0, 2.5), breaks = c(0.1, 0.3, 0.8, 1.01, 1.6, 2.0, 3.0, 5.0)) +
+  scale_y_continuous(limits = c(0, 3000)) + 
+  geom_vline(xintercept = c(0.1, 0.8, 1.6, 2.0, 3.0, 5.0), color = "red", linetype="dashed") +
+  geom_vline(xintercept = c(0.3, 1.01), color = "forestgreen", linetype = "twodash") +
+  geom_hline(yintercept = 2000, color = "brown", linetype="longdash") + 
+  geom_hline(yintercept = c(2604, 284, 2242, 95, 265), color = "forestgreen", linetype="twodash") +
+  xlab("Carat Size") + ylab("Count")
+```
+
+```{r}
+values = c(0.1, 0.3, 0.8, 1.01, 1.6, 2.0, 3.0, 5.0)
+
+for (i in values) {
+  print(table(diamonds$carat == i))
+}
+```
+
+***
+### Lesson 4.15: Gapminder Data
+
+The Gapminder website contains over 500 data sets with information about the world's population. Your task is to download a data set of your choice and create 2-5 plots that make use of the techniques from Lesson 3.
+
+You might use a simple histogram, a boxplot split over a categorical variable, or a frequency polygon. The choice is yours!
+
+You can find a link to the Gapminder website in the Instructor Notes.
+
+Once you've completed your investigation, create a post in the discussions that includes:
+
+1. any questions you answered, your observations, and summary statistics
+2. snippets of code that created the plots
+3. links to the images of your plots
+
+http://www.gapminder.org/data/ (hours per week) -> Working hours per week
+
+```{r}
+working_hours = read_excel('working_hours_per_week.xlsx', sheet='Data')
+```
+
+```{r}
+headers = colnames(working_hours)
+headers
+```
+
+```{r}
+rownames(working_hours)
+```
+
+```{r}
+names(working_hours)[names(working_hours) == "Working hours per week"] = 'Country' 
+```
+
+```{r}
+for (i in headers) {
+  if (i != 'Country'){
+    names(working_hours)[names(working_hours) == i] = substr(i, 1, 4)
+  }
+}
+```
+
+```{r}
+# Flatten the table
+hours_flat = melt(working_hours, id=c("Country"), value.name="Hours", variable.name="Year", na.rm = TRUE)
+```
+
+```{r}
+# Convert Year and Hours to numeric and round Hours to integer
+hours_flat <- hours_flat %>%
+  mutate(Year = as.numeric(as.character(Year)),
+         Hours = as.numeric(Hours),
+         Hours = round(Hours, 2))
+```
+
+```{r}
+hist(hours_flat$Year, breaks=seq(1979, 2008, by=1), main='Number of Countries with Data for Corresponding Year')
+```
+
+Resources:
+
+1. http://www.cookbook-r.com/Graphs/Plotting_distributions_(ggplot2)/
+2. https://www.statmethods.net/graphs/density.html
+3. https://www.r-bloggers.com/basics-of-histograms/
+
+```{r}
+ggplot(aes(x = Hours), data = hours_flat) +
+  geom_histogram(binwidth = 1, aes(y=..density..), color = 'black', fill = '#BA55D3') +
+  geom_density(aes(y=..density..)) +
+  facet_wrap(~Year) + # or add: scales="free"
+  ggtitle('PDF of Hours Worked for Each Year')
+```
+
+```{r}
+yearStats <- hours_flat %>%
+  group_by(Year) %>%
+  summarise(mean = mean(Hours),
+            median = median(Hours),
+            std_dev = sd(Hours),
+            min = min(Hours),
+            max = max(Hours),
+            quartile_1st = quantile(Hours, 0.25),
+            quartile_3rd = quantile(Hours, 0.75),
+            IQR = quartile_3rd - quartile_1st,
+            std_error = std_dev/sqrt(length(Hours)),
+            countries_with_data = length(Hours))
+
+yearStats
+```
+
+```{r}
+years_by_country = hours_flat %>%
+  group_by(Country) %>%
+  summarise(number_of_years = length(Year))
+```
+
+```{r}
+filter(years_by_country, number_of_years == 28)
+```
+
+Resources:
+
+1. http://www.sthda.com/english/wiki/ggplot2-axis-ticks-a-guide-to-customize-tick-marks-and-labels
+
+2. http://www.sthda.com/english/wiki/ggplot2-themes-and-background-colors-the-3-elements
+
+3. http://www.cookbook-r.com/Graphs/
+
+4. http://www.cookbook-r.com/Graphs/Colors_(ggplot2)/
+
+5. http://www.cookbook-r.com/Graphs/Axes_(ggplot2)/
+
+```{r, fig.width=7,}
+p = ggplot(yearStats, aes(x=Year, y=median))  +
+  theme(panel.background = element_rect(fill='#ffffff'),
+        plot.background = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.border = element_blank(),
+        axis.ticks = element_blank(),
+        legend.title=element_blank(),
+        legend.justification=c(1,1), legend.position=c(1,1)) +
+  
+  ylab('Hours Worked') +
+  ggtitle('Aggregate Average Working Hours Per Week by Year for 52 Countries') + 
+  
+  geom_linerange(yearStats, mapping=aes(x=Year, ymin=min, ymax=max, color = 'Min - Max Hours'), size=5) +
+  geom_linerange(yearStats, mapping=aes(x=Year, ymin=quartile_1st, ymax=quartile_3rd, color = 'IQR'), size=5) +
+  geom_line(yearStats, mapping=aes(x=Year, y=median, group=1, color= 'World Median'))  +
+  geom_line(data = subset(hours_flat, Country == "United States"),
+            aes(x = Year, y = Hours, group = Country, color = 'U.S. Median')) +
+  geom_line(data = subset(hours_flat, Country == 'Sweden'),
+            aes(x = Year, y = Hours, group = Country, color = 'Swiss Median')) +
+  
+  scale_color_manual(values = c('Min - Max Hours' = '#FFCC00', 'IQR' = '#FF9900',
+                                'World Median' = '#006633', 'U.S. Median' = '#3300FF', 'Swiss Median' = '#000000'),
+                     breaks = c('Min - Max Hours', 'IQR', 'U.S. Median', 'World Median', 'Swiss Median')) +
+  
+  
+  geom_hline(yintercept=seq(26, 56, 2), color='#0033FF', linetype=3) +
+  geom_vline(xintercept = seq(1980, 2007, 3), color='#0033FF', linetype=3, size=0.5) +
+  coord_cartesian(ylim = c(26,56)) +
+  scale_y_continuous(breaks=seq(26, 56, 2)) +
+  scale_x_continuous(breaks=seq(1980, 2007, 3))
+
+p
+```
+
+```{r, fig.width=9, fig.height=6}
+p + coord_cartesian(ylim=c(28, 38)) + 
+  ggtitle('IQR of Aggregate Average Working Hours Per Week by Year for 52 Countries') +
+  geom_text(data = hours_flat[hours_flat$Country == "United States",],
+            aes( x = Year, y = Hours, color = Country, group = Country, label = Hours),
+            hjust = -.1, vjust = -1.2, size = 2.5, color = '#3300FF') +
+  geom_text(data = hours_flat[hours_flat$Country == "Sweden",],
+            aes( x = Year, y = Hours, color = Country, group = Country, label = Hours),
+            hjust = -.1, vjust = -1.2, size = 2.5, color = '#000000') +
+  geom_text( aes(x = Year, y = median, label = median), hjust = -.1, vjust = 1.2, size = 2.5, color = '#006633')
+```
+
+```{r}
+ggplot(subset(hours_flat, Country %in% c("Sweden", "United States", "Japan", "United Kingdom", "Canada")),
+       aes(x=Country, y=Hours, fill=Country)) +
+  geom_boxplot() + 
+  stat_summary(fun.y = mean, geom="point", shape = 5) +
+  ylab("Hours Worked per Week") + xlab("") +
+  theme(legend.position="none")
+```
+
+```{r}
+ggplot(subset(hours_flat, Country %in% c("Sweden", "United States", "Japan", "United Kingdom", "Canada")),
+       aes(x = Year, y = Hours)) + 
+  geom_line(aes(color = Country, group = Country)) + 
+  theme(axis.text.x = element_text(angle = 45)) + 
+  scale_y_continuous(breaks=seq(26, 56, 2)) +
+  scale_x_continuous(breaks=seq(1980, 2007, 3)) + 
+  ylab('Hours Worked per Week') + xlab('Year') + 
+  theme(plot.title=element_text(face="bold", size=12)) +
+  ggtitle("Variance in Weekly Hours Worked from 1980-2007")
+```
+
+***
+### Lesson 4.16: Quiz: Exploring Your Friends' Birthdays
+
+Your task is to investigate the distribution of your friends' birth months and days. 
+
+Here some questions you could answer, and we hope you think of others. 
+
+1. How many people share your birthday? Do you know them? (Reserve time with them or save money to buy them a gift!)
+2. Which month contains the most number of birthdays?
+3. How many birthdays are in each month?
+4. Which day of the year has the most number of birthdays?
+5. Do you have at least 365 friends that have birthdays on everyday of the year?
+
+You will need to do some data munging and additional research to complete this task. This task won't be easy, and you may encounter some unexpected challenges along the way. We hope you learn a lot from it though.
+
+You can expect to spend 30 min or more on this task depending if you use the provided data or obtain your personal data. We also encourage you to use the lubridate package for working with dates. Read over the documentation in RStudio and search for examples online if you need help.
+
+You'll need to export your Facebooks friends' birthdays to a csv file. You may need to create a calendar of your Facebook friends' birthdays in a program like Outlook or Gmail and then export the calendar as a csv file.
+
+Once you load the data into R Studio, you can use the strptime() function to extract the birth months and birth days. We recommend looking up the documentation for the function and finding examples online.
+
+```{r}
+bds <- read.csv("birthdaysExample.csv")
+```
+
+```{r}
+dates_ymd <- mdy(bds$dates)
+```
+
+```{r}
+bds <- bds %>%
+  mutate(Birthday = dates_ymd,
+         Year = year(dates_ymd),
+         Month = month(dates_ymd, label = TRUE),
+         Day = day(dates_ymd),
+         Weekday = weekdays(dates_ymd))
+```
+
+```{r}
+bds$Weekday <- factor(bds$Weekday, levels=c('Monday', 'Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'), ordered=TRUE)
+```
+
+```{r}
+ggplot(bds, aes(x = Month, fill = Month)) +
+  geom_bar(color = "Black", show.legend = FALSE) +
+  geom_text(stat = "count", aes(label = ..count..), vjust = -0.5) +
+  ylab("Number of Birthdays per Month")
+```
+
+```{r}
+t = table(bds$Month)
+t
+```
+
+```{r}
+bds %>%
+  group_by(Month) %>%
+  summarise(n = n())
+```
+
+```{r}
+names(t)[which.max(t)]
+```
+
+```{r}
+ggplot(bds, aes(x = Day, fill = factor(Day))) +
+  geom_bar(show.legend = FALSE) +
+  geom_text(stat = "count", aes(label = ..count..), vjust = -0.5) +
+  scale_x_continuous(breaks = seq(1, 31, 1)) +
+  ylab("Number of Birthdays per Day")
+```
+
+```{r}
+ggplot(bds, aes(x = Weekday, fill = Weekday)) +
+  geom_bar(show.legend = FALSE) +
+  geom_text(stat = "count", aes(label = ..count..), vjust = -0.5) +
+  ylab("Number of Birthdays per Weekday")
+```
+
+```{r, fig.height=9}
+ggplot(bds, aes(x = Day, fill = factor(Day))) +
+  geom_bar(show.legend = FALSE) +
+  geom_text(stat = "count", aes(label = ..count..), vjust = -0.5) +
+  scale_x_continuous(breaks = seq(1, 31, 1)) +
+  ylab("Number of Birthdays per Day") +
+  facet_grid(Month ~ .) + 
+  geom_hline(yintercept=seq(0, 8, 2), color='#0033FF', linetype=3)
+```
+
+Resources:
+
+1. http://mgimond.github.io/ES218/Week03a.html
+2. http://ggplot2.tidyverse.org/reference/facet_grid.html
+
+```{r}
+subset(bds, (Month == "Aug") & (Day == 21))
+```
+
+```{r}
+filter(bds, Month == "Aug", Day == 21)
+```
+
+Birthdays/Day ordered least to greatest
+```{r}
+bds %>%
+  group_by(Day) %>%
+  summarise(n = n()) %>%
+  arrange(n)
+```

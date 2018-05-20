@@ -1,0 +1,1034 @@
+---
+title: "UDACITY R Data Analysis Project - Prosper Peer to Peer Lending Data-set Exploration"
+author: "Trenton J. McKinney"
+output:
+  html_notebook:
+    toc: true
+    toc_float:
+      collapsed: true
+    toc_depth: 4
+    theme: "cerulean"
+    fig_width: 10
+---
+***
+## Introduction
+**About Prosper**
+
+From the [Prosper](https://www.prosper.com/) website.  Prosper is America's first [marketplace lending platform](https://www.prosper.com/plp/how-it-works), with over $10 billion in funded loans.
+
+Prosper allows people to invest in each other in a way that is financially and socially rewarding. On Prosper, borrowers list loan requests between \$2,000 and \$35,000 and individual investors invest as little as \$25 in each loan listing they select. Prosper handles the servicing of the loan on behalf of the matched borrowers and investors.
+
+**Overview**
+
+From Udacity:
+
+*This data set contains 113,937 loans with 81 variables on each loan, including loan amount, borrower rate (or interest rate), current loan status, borrower income, borrower employment status, borrower credit history, and the latest payment information.*
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+library(readxl)
+library(tibble)
+library(ggplot2)
+library(plyr)
+library(dplyr)
+library(scales)
+library(memisc)
+library(reshape2)
+library(lubridate)
+library(ggthemes)
+library(gridExtra)
+library(alr3)
+library(rio)
+library(GGally)
+library(RColorBrewer)
+library(tidyr)
+library(maps)
+library(fiftystater)
+```
+
+***
+## Setup & General
+```{r, echo=FALSE}
+prosper <- read.csv('../Project/Data/prosperLoanData.csv')
+```
+
+### Select Categories of Interest
+The dataframe has been reduced from 81 to 22 categories that may be evaluated as parameters of interest within the scope of the data-set options.
+```{r}
+prosper <- prosper[c(3, 5, 6, 9, 13, 15:18, 20, 26, 35:36, 41:42, 46:50, 53:54)]
+```
+
+```{r}
+colnames(prosper)
+```
+
+## Data Transformations
+### as.factor
+```{r}
+prosper$ProsperScore <- as.factor(prosper$ProsperScore)
+prosper$ListingCategory..numeric. <- as.factor(prosper$ListingCategory..numeric.)
+prosper$Term <- as.factor(prosper$Term)
+prosper$ProsperRating..Alpha. <- factor(prosper$ProsperRating..Alpha.,
+                                        levels = c('AA', 'A', 'B', 'C', 'D',
+                                                   'E', 'HR'), ordered = TRUE)
+```
+
+### Calculated Yearly Income
+```{r}
+prosper$CalcYearlyIncome <- prosper$StatedMonthlyIncome * 12
+```
+
+### Reformat Income Range
+Create a more refined view of income range based upon StatedMonlyIncome * 12
+```{r}
+prosper$IncomeRange_old <- prosper$IncomeRange
+prosper$IncomeRange <- cut(prosper$CalcYearlyIncome, dig.lab = 10,
+                           breaks = c(0, 10000, 20000, 30000, 40000, 50000,
+                                      60000, 70000, 80000, 90000, 100000,
+                                      200000, 21000036.))
+```
+
+### Reformat Date categories as.Date
+```{r}
+prosper$ListingCreationDate <- as.Date(prosper$ListingCreationDate,
+                                       format = '%Y-%m-%d')
+prosper$ListingCreationYear <- year(prosper$ListingCreationDate)
+```
+
+### Remove 2005
+There are very few loans in 2005
+```{r}
+prosper <- subset(prosper, ListingCreationYear != 2005)
+```
+
+### Create a new Delinquent category based upon LoanStatus
+```{r}
+# Used for filling histograms
+prosper$Delinquent <- ifelse(
+  prosper$LoanStatus == 'Completed' |
+  prosper$LoanStatus == 'Current' |
+  prosper$LoanStatus == 'FinalPaymentInProgress',
+  'False', 'True')
+
+prosper$Delinquent <- factor(prosper$Delinquent)
+```
+
+```{r}
+# Used in calculating correlations
+prosper$DelinquentNum <- as.numeric(prosper$Delinquent,
+                                    levels = c('False', 'True'))
+```
+
+### Replace DC with MD
+DC is not a state
+```{r}
+prosper$BorrowerState[prosper$BorrowerState == 'DC'] <- 'MD'
+```
+
+### as.numeric
+```{r}
+prosper$ProsperScore..numeric. <- as.numeric(prosper$ProsperScore,
+                                             levels = c(1, 2, 3, 4, 5, 6, 7, 8,
+                                                        9, 10, 11))
+```
+
+### Create ListingCategory from ListingCategory..numeric..
+```{r}
+categories = c('NA', 'Debt Consol', 'Home Improvement', 'Business', 'Personal',
+               'Student', 'Auto', 'Other', 'Baby', 'Boat', 'Cosmetic',
+               'Engagement', 'Green', 'Household', 'Large Purchases',
+               'Medical/Dental', 'Motorcycle', 'RV', 'Taxes', 'Vacation',
+               'Wedding')
+
+prosper$ListingCategory <- prosper$ListingCategory..numeric.
+levels(prosper$ListingCategory) <- categories
+```
+
+### Create Ratio_PL_Pay_OT - Ratio of Prosper Loan Payments Paid On Time
+```{r}
+# Used for linear model
+prosper$Ratio_PL_Pay_OT <- prosper$OnTimeProsperPayments/
+  prosper$TotalProsperPaymentsBilled
+prosper$Ratio_PL_Pay_OT[is.na(prosper$Ratio_PL_Pay_OT)] <- 0
+```
+
+
+### Head
+```{r, echo=FALSE}
+head(prosper)
+```
+
+***
+## Inquiry
+### Correlation Matrix
+```{r, fig.width=9, results='hide', warning=FALSE, message=FALSE, echo=FALSE}
+ggcorr(prosper, label = TRUE, label_size = 2,
+       hjust = 0.8, size = 2, color = "black", layout.exp = 2) +
+  ggtitle('Prosper Correlation Matrix') +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+Generated to provide a high level view of possibly interrelated metrics.
+
+***
+### Listing Creation Date
+#### ListingCreationYear colored by LoanStatus & Delinquent - Univariate
+```{r, echo=FALSE}
+ggplot(prosper, aes(x = as.factor(ListingCreationYear),
+                    fill = interaction(LoanStatus, Delinquent))) +
+  geom_bar(color = 'black') +
+  xlab('Listing Creation Year') +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  ggtitle('Listing Creation Year -\nInteraction of Loan Status and Delinquent')
+```
+For the purpose of this analysis, all categories of LoanStatus except Completed, Current & FinalPaymentInProgress are True in the Delinquent category.
+
+#### Listing Creation Year with Delinquency
+```{r, echo=FALSE}
+table(prosper$ListingCreationYear)
+```
+
+#### ListingCreationYear colored by Delinquent - Univariate
+```{r, echo=FALSE}
+ggplot(data = prosper, aes(x = ListingCreationYear, fill = Delinquent)) +
+  geom_bar() +
+  geom_text(aes(label=..count..), stat="count", position = position_stack()) +
+  scale_fill_brewer(palette = "Accent") +
+  xlab('Listing Creation Year') +
+  scale_x_continuous(breaks = seq(2006, 2014, 1)) +
+  scale_y_continuous(limits = c(0, 36000), breaks = seq(0, 36000, 2000)) +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  ggtitle('Listing Creation Year - Delinquent')
+```
+A view of the absolute number of loans and delinquencies.  As will hold true for all further discussions, delinquencies is a reflection of the loan status through 2014.  The loan terms are for 1, 3 and 5 years, so the final closed status can only be determined for most loans through 2011 (i.e. most loan terms are 3 years).  Note the increasing number of loans following the 2007 downturn, which acccording to [Wikipedia](https://en.wikipedia.org/wiki/Great_Recession), ended in June 2009 (by economic measures).  This graph also shows a decrease in the proportion of delinquencies after 2008.
+
+```{r, echo=FALSE}
+with(prosper, cor.test(ListingCreationYear, DelinquentNum, method = 'pearson'))
+```
+
+#### ListingCreationDate - Univariate
+```{r, echo=FALSE}
+ggplot(prosper, aes(x = ListingCreationDate)) +
+  geom_histogram(binwidth = 1, fill = 'purple') +
+  scale_x_date(date_breaks = '4 month') +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        plot.title = element_text(hjust = 0.5)) +
+  ggtitle('Listing Creation Date Histogram')
+  
+```
+
+```{r, echo=FALSE}
+# determine beginning and end date of data-set
+min(prosper$ListingCreationDate)
+max(prosper$ListingCreationDate)
+
+# determine break range
+max(subset(prosper$ListingCreationDate, prosper$ListingCreationYear == 2008))
+min(subset(prosper$ListingCreationDate, prosper$ListingCreationYear == 2009))
+
+min(subset(prosper$ListingCreationDate,
+           prosper$ListingCreationDate >= '2009-05-15'))
+```
+2005 has been excluded from this data-set because of the small quantity of loans; analysis will cover 2006/01/06 through 2014/03/10.  Almost no lending occurred from 2008/10/16 through 2009/07/13 because the U.S. Securities and Exchange Commision required peer-to-peer companies to undergo the arduous process of registering their offerings as securities [Wikipedia](https://en.wikipedia.org/wiki/Peer-to-peer_lending#United_States).
+
+***
+### Income
+#### <a id="ir-old_es"></a>IncomeRange (original factors) by EmploymentStatus - Bivariate
+```{r, fig.width=10, fig.height=10, echo=FALSE}
+ggplot(data = prosper, aes(x = EmploymentStatus, y = IncomeRange_old)) +
+  geom_tile(aes(fill = IncomeRange_old), color = 'black') +
+  scale_fill_brewer() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        plot.title = element_text(hjust = 0.5)) +
+  facet_wrap(~ListingCreationYear) +
+  ggtitle('Income Range by Employment Status - Listing Creation Year')
+```
+
+#### <a id="cyi_ir-old"></a>CalcYearlyIncome by IncomeRange (original factors) - Bivariate
+```{r, fig.width=10, echo=FALSE}
+ggplot(data = prosper, aes(x = IncomeRange_old, y = CalcYearlyIncome,
+                           color = IncomeRange_old)) +
+  geom_boxplot() +
+  scale_fill_brewer(type = 'seq') +
+  scale_y_log10(labels = dollar) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        plot.title = element_text(hjust = 0.5)) +
+  facet_wrap(~ListingCreationYear, scales = 'free_y') +
+  xlab('Income Range (original factors)') +
+  ggtitle('Calculated Yearly Income by Income Range - Listing Creation Year')
+```
+[Income Range (old) by Employment Status](#ir-old_es) shows EmploymentStatus of Not Employed primarily overlaps with IncomeRange_old Not employed.  However, [CalcYearlyIncome by IncomeRange_old](#cyi_ir-old) shows IncomeRange_old Not employed and Not displayed are composed of many incomes when cross referenced by CalcYearlyIncome ($StatedMonthlyIncome * 12$).  Not displayed is only shown for 2006 and 2007.  From 2007 - 2009, Not employed doesn't necessarily mean \$0 income.  From 2010 - 2013 there is still a range of Not employed, but as the boxplot shows, Not Employed = \$0 income.  As such, EmployementStatus and IncomeRange_old will not be used for further analysis.  IncomeRange has been reformatted to provide better resolution, as shown in the table below.
+
+
+#### Income Range colored with Delinquency - Univariate
+```{r, echo=FALSE}
+table(prosper$IncomeRange)
+```
+
+```{r, fig.width=10, echo=FALSE}
+ggplot(data = subset(prosper, !is.na(IncomeRange)), aes(IncomeRange)) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        plot.title = element_text(hjust = 0.5)) +
+  geom_bar(aes(fill = Delinquent), position = position_stack(reverse = TRUE)) +
+  facet_wrap(~ListingCreationYear) +
+  scale_fill_brewer(palette = "Accent") +
+  ggtitle('Income Range - Listing Creation Year & Delinquent')
+```
+Note the significant delinquencies immediately preceeding and during the economic downturn and the reduction in the number of loans for 2009 and 2010.
+
+#### Income Range colored with Income Verifiable - Univariate
+```{r, fig.width=10, echo=FALSE}
+ggplot(data = subset(prosper, !is.na(IncomeRange)), aes(IncomeRange)) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        plot.title = element_text(hjust = 0.5)) +
+  geom_bar(aes(fill = IncomeVerifiable)) +
+  scale_fill_brewer(palette = "Accent") +
+  facet_wrap(~ListingCreationYear, scales = 'free_y') +
+  ggtitle('Income Range - Listing Creation Year & Income Verifiable')
+```
+Most incomes after 2007, are verifiable.
+
+#### Calculated Yearly Income with Delinquency - Univariate
+```{r, fig.width=9, echo=FALSE}
+ggplot(prosper, aes(CalcYearlyIncome)) +
+  geom_histogram(binwidth = 4000, aes(fill = Delinquent), color = 'black') +
+  scale_x_continuous(labels = dollar, limits = c(0, 200000),
+                     breaks = seq(0, 200000, 20000)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        plot.title = element_text(hjust = 0.5)) +
+  scale_fill_brewer(palette = "Accent") +
+  facet_wrap(~ListingCreationYear) +
+  ggtitle('Calculated Yearly Income - Listing Creation Year & Delinquent')
+```
+
+```{r, echo=FALSE}
+years = seq(2006, 2014, 1)
+
+for (y in years) {
+  result <- with(subset(prosper, ListingCreationYear == y),
+                 cor.test(StatedMonthlyIncome, DelinquentNum,
+                          method = 'pearson'))
+  print(y)
+  print(result$estimate)
+}
+```
+Income is not correlated to delinquencies.  In general, delinquency count follows income count.  The y-axis scale is maintained as static to more easily observe the difference in the number of loans per year.
+
+***
+### Proportion Delinquent
+```{r, echo=FALSE}
+del_income <- prosper %>% 
+  filter(!is.na(IncomeRange)) %>% 
+  group_by(IncomeRange, Delinquent) %>% 
+  summarise(n = n())
+
+del_income
+```
+
+```{r, echo=FALSE}
+del_income.wide <- dcast(del_income,
+                         IncomeRange ~ Delinquent,
+                         value.var = 'n')
+
+del_income.wide$prop_del <- del_income.wide$True / (del_income.wide$True +
+                                                      del_income.wide$False)
+
+del_income.wide
+```
+
+#### <a id="prop_del_by_ir"></a>Proportion Delinquent by Income Range - Bivariate
+```{r, echo=FALSE}
+ggplot(data = del_income.wide, aes(x = IncomeRange, y = prop_del)) +
+  geom_point(color = 'purple') +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        plot.title = element_text(hjust = 0.5)) +
+  ylab('Proportion Delinquent') + xlab('Income Range') +
+  ggtitle('Proportion Delinquent by Income Range')
+```
+
+```{r, echo=FALSE}
+with(del_income.wide, cor.test(prop_del, as.numeric(IncomeRange),
+                               method = 'pearson'))
+```
+[Proportion Delinquent by Income Range - Bivariate](#prop_del_by_ir), supported by the calculated correlation of -0.944, demonstrates a negative relationship between income range and the proportion of delinquencies.  As IncomeRange increases, ProportionDelinquent decreases.
+
+### Proportion Delinquent by Year
+```{r, echo=FALSE}
+del_year_income <- prosper %>% 
+  filter(!is.na(IncomeRange)) %>% 
+  group_by(ListingCreationYear, IncomeRange, Delinquent) %>% 
+  summarise(n = n())
+
+del_year_income
+```
+
+```{r, echo=FALSE}
+del_year_income.wide <- dcast(del_year_income,
+                         ListingCreationYear + IncomeRange ~ Delinquent,
+                         value.var = 'n')
+
+# some ranges had NA delinquencies, interpreted as 0 for calculation
+del_year_income.wide[is.na(del_year_income.wide)] <- 0 
+del_year_income.wide$prop_del <- del_year_income.wide$True /
+  (del_year_income.wide$True + del_year_income.wide$False)
+del_year_income.wide
+```
+
+#### <a id="p.use1"></a>Proportion Delinquent by Income Range colored by Year - Multivariate
+```{r, fig.width=10, echo=FALSE}
+p.use1 <- ggplot(data = del_year_income.wide, aes(x = IncomeRange, y = prop_del)) +
+  geom_line(data = subset(del_year_income.wide),
+            aes(x = IncomeRange, y = prop_del,
+                group = ListingCreationYear,
+                color = as.factor(ListingCreationYear))) +
+  geom_point() +
+  scale_fill_brewer(type='seq' ) +
+  scale_color_discrete(name = 'Listing\nCreation\nYear') +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        plot.title = element_text(hjust = 0.5)) +
+  ylab('Proportion Delinquent') + xlab('Income Range') +
+  scale_y_continuous(limits = c(0, 0.55), breaks = seq(0, 0.55, 0.05)) +
+  ggtitle('Proportion Delinquent by Income Range - Listing Creation Year')
+
+p.use1
+```
+The relationship between Proportion Delinquent and the grouping of the years could be attributable to the loan term length.  The majority of loans have a term length of 3 years and some extend to 5 years.  Explicit data for the full loan term only exists for loans originating from 2006 until 2009.  A mostly complete set of data existis for loans originiating to 2011.  A concluding comparison between loans created from 2012 with those created prior to 2012 is not feasable with the available data. Additionally, Prosper introduced new methods for assessing risk (ProsperScore), which subsequently helped to reduce the number of delinquent accounts.
+
+[Retrun to Final Plots & Summary](#final)
+
+#### <a id="mean_prop_del_by_ir"></a>Mean Proportion Delinquent by Income Range - Bivariate
+```{r, fig.width=8, echo=FALSE}
+ggplot(data = del_year_income.wide, aes(x = IncomeRange, y = prop_del)) +
+  stat_summary(fun.y = 'mean', geom = 'point', color = 'purple') +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        plot.title = element_text(hjust = 0.5)) +
+  ylab('Proportion Delinquent') +
+  scale_y_continuous(limits = c(0.1, 0.225), breaks = seq(0.1, 0.225, 0.025)) +
+  xlab('Income Range') + ylab('Mean Proportion Delinquent') +
+  ggtitle('Mean Proportion Delinquent by Income Range')
+```
+Note the difference between [Mean Proportion Delinquent by Income Range - Bivariate](#mean_prop_del_by_ir) and [Proportion Delinquent by Income Range - Bivariate](#prop_del_by_ir).  The mean proportion delinquent demonstrates less variance across income ranges.  The mean is of the ProportionDelinquent by IncomeRange for each ListingCreationYear.
+
+***
+### Debt to Income Ratio
+```{r, echo=FALSE}
+
+summary(prosper$DebtToIncomeRatio)
+```
+
+#### Debt to Income Ratio colored by Delinquent - Univariate
+```{r, fig.width=9, echo=FALSE}
+ggplot(data = subset(prosper, ListingCreationYear > 2005 &
+                       !is.na(DebtToIncomeRatio)),
+       aes(y = DebtToIncomeRatio, fill = Delinquent)) +
+  #geom_histogram(binwidth = 0.02, color = 'black') +
+  geom_boxplot(aes(x = Delinquent)) +
+  scale_y_continuous(limits = c(0, 1)) +
+  scale_fill_brewer(palette = "Accent") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  facet_wrap(~ListingCreationYear, scales = 'free_y') +
+  ggtitle('Debt to Income Ratio - Listing Creation Year & Delinquent')
+```
+The DebtToIncomeRatio range has been limited to a maximum of 1 in the visualization.  The actual range extends to 10, causing positive skewing.
+
+***
+### Revolving Credit Balance
+```{r, echo=FALSE}
+summary(prosper$RevolvingCreditBalance)
+```
+
+#### RevolvingCreditBalance colored by Delinqent - Univariate
+```{r, fig.width=9, echo=FALSE}
+ggplot(data = subset(prosper, !is.na(RevolvingCreditBalance) &
+                       RevolvingCreditBalance != 0),
+       aes(RevolvingCreditBalance, fill = Delinquent)) +
+  geom_histogram(color = 'black') +
+  scale_x_log10(expression(paste(Log[10], ' of Revolving Credit Balance')),
+                breaks = scales::trans_breaks("log10", function(x) 10^x),
+                labels = dollar) +
+  facet_wrap(~ListingCreationYear, scales = 'free_y') +
+  scale_fill_brewer(palette = "Accent") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        plot.title = element_text(hjust = 0.5)) +
+  ggtitle(bquote(paste(Log[10], ' of Revolving Credit Balance - Listing Creation Year & Delinquent')))
+```
+A $Log_{10}$ scaling of the x-axis produces a normal distribution of Revolving Credit Balance, otherwise positively skewed becasue of large valued outliers.
+
+#### RevolvingCreditBalance by IncomeRange - Bivariate
+```{r, echo=FALSE}
+ggplot(data = subset(prosper, !is.na(IncomeRange) &
+                       RevolvingCreditBalance != 0),
+       aes(IncomeRange, RevolvingCreditBalance, color = IncomeRange)) +
+  geom_boxplot() +
+  scale_y_log10(labels = dollar) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        plot.title = element_text(hjust = 0.5)) +
+  geom_hline(yintercept = c(2416, 34205), color='#0033FF',
+             linetype=3, size = 1) +
+  ggtitle('Revolving Credit Balance by Income Range')
+```
+
+```{r, echo=FALSE}
+with(subset(prosper, !is.na(IncomeRange)),
+     cor.test(as.numeric(IncomeRange), RevolvingCreditBalance,
+              method = 'pearson'))
+summary(subset(prosper, IncomeRange == '(0,10000]')$RevolvingCreditBalance)
+summary(subset(prosper,
+               IncomeRange == '(200000,21000036]')$RevolvingCreditBalance)
+```
+From the lowest to highest IncomeRange, we can see an increase in median RevolvingCreditBalance from \$2,416 to \$34,205.  The summary shows, in the case of the RevolvingCreditBalance for lowest and highest IncomeRange, a positive skew because the mean is significantly greater than the median.
+
+***
+### Loan Term
+```{r, echo=FALSE}
+table(prosper$Term)
+```
+
+#### Loan Term colored by Delinquency - Univariate
+```{r, echo=FALSE}
+ggplot(data = prosper, aes(x = Term, fill = Delinquent)) +
+  geom_bar() +
+  scale_y_continuous(limits = c(0, 88000), breaks = seq(0, 88000, 8000)) +
+  scale_fill_brewer(palette = "Accent") +
+  xlab('Loan Term (Months)') +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  ggtitle('Loan Term (months) - Delinquent')
+```
+
+####  ListingCreationYear colored by Term - Univariate
+```{r, echo=FALSE}
+ggplot(prosper, aes(x = as.factor(ListingCreationYear), fill = Term)) +
+  geom_bar() +
+  xlab('Listing Creation Year') +
+  scale_y_continuous(breaks = seq(0, 35000, 2500)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        plot.title = element_text(hjust = 0.5)) +
+  facet_wrap(~Delinquent) +
+  ggtitle('Listing Creation - Delinquent & Term length')
+```
+Most loans are for 36 months, as such, most delinquencies occured on 36 month loans.
+
+***
+### ProsperScore (Risk)
+```{r, echo=FALSE}
+table(prosper$ProsperScore)
+```
+
+#### ProsperScore (Risk) with Delinquency - Univariate
+```{r, fig.width=9, echo=FALSE}
+ggplot(data = subset(prosper, ListingCreationDate > 2009-07-31 &
+                       !is.na(ProsperScore)),
+       aes(x = ProsperScore, fill = Delinquent)) +
+  geom_bar() +
+  scale_fill_brewer(palette = "Accent") +
+  xlab('Prosper (Risk) Score') +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  facet_wrap(~ListingCreationYear, scales = 'free_y') +
+  ggtitle('Prosper Score (risk) - Listing Creation Year & Delinquent')
+```
+
+```{r, echo=FALSE}
+with(subset(prosper, !is.na(ProsperScore)),
+     cor.test(ProsperScore..numeric., DelinquentNum, method = 'pearson'))
+```
+There's no noticible correlation between prosper risk score (11 is the best score) and delinquency.  The distribution changes from negatively skewed to normalishly skewed after 2012.  The largest number of borrowers are assigned a risk score of 4 after 2012 and there is a significant reduction in delinquent accounts.
+
+***
+### Delinquencies by State
+```{r, echo=FALSE}
+map.df <- prosper %>% 
+  filter(!is.na(BorrowerState), !is.na(Delinquent)) %>% 
+  group_by(BorrowerState, Delinquent) %>% 
+  summarise(n = n())
+
+# remove row with empty state (wasn't able to filter it out)
+map.df <- map.df[-c(1, 2),] 
+# add column with full state name
+map.df$state <- state.name[match(map.df$BorrowerState, state.abb)] 
+map.df$state <- tolower(map.df$state) # to lowercase
+map.df <- map.df[c(2:4)] # keep two columns
+map.df
+```
+
+```{r, echo=FALSE}
+map.df.wide <- dcast(map.df,
+                     state ~ Delinquent,
+                     value.var = 'n')
+
+map.df.wide[is.na(map.df.wide)] <- 0
+map.df.wide$prop_del <- map.df.wide$True /
+  (map.df.wide$True + map.df.wide$False)
+map.df.wide
+```
+
+```{r, echo=FALSE}
+summary(map.df.wide$prop_del)
+```
+
+#### <a id="p.country"></a>Delinqencies by State Heat Map - Bivariate
+```{r, results='hide', warning=FALSE, message=FALSE, echo=FALSE}
+states <- data.frame(state.center, state.abb)
+states <- states[!(states$state.abb %in% c("AK", "HI")),]
+
+states_map <- map_data("state")
+
+p1 <- ggplot()
+# borders
+p1 <- p1 + geom_map(data=states_map, map=fifty_states, aes(map_id=region),
+                    color="white", size=0.15)
+# fills
+p1 <- p1 + geom_map(data=subset(map.df, Delinquent == 'True'), map=fifty_states,
+                    aes(fill=n, map_id=state), color="white", size=0.15)
+# labels
+p1 <- p1 + geom_text(data=states, aes(x=x, y=y, label=state.abb, group=NULL),
+                     size=2)
+# decent projection
+p1 <- p1 + coord_map("albers", lat0=39, lat1=45)
+p1 <- p1 + scale_fill_distiller(palette="PuRd")
+# better theme
+p1 <- p1 + labs(x=NULL, y=NULL)
+p1 <- p1 + theme_bw()
+p1 <- p1 + theme(panel.grid=element_blank())
+p1 <- p1 + theme(panel.border=element_blank())
+p1 <- p1 + theme(axis.ticks=element_blank())
+p1 <- p1 + theme(axis.text=element_blank(),
+                 plot.title = element_text(hjust = 0.5)) +
+  ggtitle('Total Delinquent') + fifty_states_inset_boxes()
+
+#p1
+```
+
+#### Proportion Delinquent by State Heat Map - Bivariate
+```{r, results='hide', warning=FALSE, message=FALSE, echo=FALSE}
+p2 <- ggplot()
+# borders
+p2 <- p2 + geom_map(data=states_map, map=fifty_states, aes(map_id=region),
+                    color="white", size=0.15)
+# fills
+p2 <- p2 + geom_map(data=map.df.wide, map=fifty_states,
+                    aes(fill=prop_del, map_id=state), color="white", size=0.15)
+# labels
+p2 <- p2 + geom_text(data=states,
+                     aes(x=x, y=y, label=state.abb, group=NULL), size=2)
+# decent projection
+p2 <- p2 + coord_map("albers", lat0=39, lat1=45)
+p2 <- p2 + scale_fill_distiller(palette="PuRd")
+# better theme
+p2 <- p2 + labs(x=NULL, y=NULL)
+p2 <- p2 + theme_bw()
+p2 <- p2 + theme(panel.grid=element_blank())
+p2 <- p2 + theme(panel.border=element_blank())
+p2 <- p2 + theme(axis.ticks=element_blank())
+p2 <- p2 + theme(axis.text=element_blank(),
+                 plot.title = element_text(hjust = 0.5)) +
+  ggtitle('Proportion Delinquent') + fifty_states_inset_boxes()
+
+#p2
+```
+
+```{r, fig.width=10, results='hide', warning=FALSE, message=FALSE, echo=FALSE}
+grid.arrange(p1, p2, ncol = 1)
+```
+Any interesting observations from the number of delinquencies depicted in the first choropleth map are surpassed by the proportion delinquent choropleth map, which gives a better understanding of the deliquency distribution by state.  Delinquencies range between 9.5% and 36.6% with a mean of 16.5%.
+
+[Retrun to Final Plots & Summary](#final)
+
+***
+### Listing Category
+```{r, echo=FALSE}
+summary(prosper$ListingCategory)
+```
+
+#### ListingCategory colored by Delinquent - Univariate
+```{r, echo=FALSE}
+ggplot(data = prosper, aes(x = ListingCategory, fill = Delinquent)) +
+  geom_bar() +
+  scale_y_continuous(limits = c(0, 60000), breaks = seq(0, 60000, 5000)) +
+  scale_fill_brewer(palette = "Accent") +
+  xlab('Listing Category') +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0),
+        plot.title = element_text(hjust = 0.5)) +
+  ggtitle('Listing Category - Delinquent')
+```
+The quantity of Debt Consolidation loans is so large compared to the other listing categories, that ListingCategory is rendered uninteresting as a metric for analysing the Prosper dataset.  NA, Other and Personal are useless for providing any insight other than the borrower didn't want to divulge the reason for the loan.
+
+***
+### Borrower Rate
+```{r, echo=FALSE}
+summary(prosper$BorrowerRate)
+```
+
+#### Borrower Rate filled by Delinquent Status across Creation Year - Univariate
+```{r, fig.width=9, echo=FALSE}
+ggplot(data = prosper, aes(x = BorrowerRate, fill = Delinquent)) +
+  geom_histogram(binwidth = 0.005, color = 'black') +
+  scale_x_continuous(limits = c(0.04, 0.36), breaks = seq(0.04, 0.36, 0.04)) +
+  xlab('Borrower Rate') +
+  facet_wrap(~ListingCreationYear, scales = 'free_y') +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  ggtitle('Borrower Rate - Listing Creation Year & Delinquent')
+```
+Borrower Rate count colored by delinquent statues across listing creation year.
+
+#### <a id="p.use3"></a>Estimated Return by Borrower Rate - Multivariate
+```{r, echo=FALSE}
+summary(subset(prosper$BorrowerRate,
+               prosper$ListingCreationDate > 2009-07-31 &
+                 !is.na(prosper$ProsperScore)))
+```
+
+```{r, fig.width=9, fig.height=7, echo=FALSE}
+p.use3 <- ggplot(data = subset(prosper, ListingCreationDate > 2009-07-31 &
+                                 !is.na(ProsperScore)),
+       aes(x = BorrowerRate, y = EstimatedReturn, color = ProsperScore)) +
+  geom_point() +
+  scale_fill_brewer(type='seq' ) +
+  scale_x_continuous(limits = c(0.04, 0.36), breaks = seq(0.04, 0.36, 0.04)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  facet_wrap(~ListingCreationYear, scales = 'free_y') +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  ggtitle('Estimated Return by Borrower Rate') +
+  xlab('Borrower Rate') + ylab('Estimated Return')
+
+p.use3
+```
+
+```{r, echo=FALSE}
+with(subset(prosper, ListingCreationDate > 2009-07-31),
+     cor.test(BorrowerRate, EstimatedReturn, method = 'pearson'))
+```
+As stated in the Prosper Variable Definition spreadsheet, ProsperScore is a custom risk score built using historical Prosper data and is applicable to loans originiating after 2009/07/31.  11 and 1 are the lowest and highest risk respectively.  The data show lower risk borrowers have a lower BorrowerRate.  Following 2010, there's a significant reduction in the number of higher risk loans and Estimated Return is greater than 0; note the estimated losses in 2009 and 2010.
+
+[Retrun to Final Plots & Summary](#final)
+
+***
+### <a id="p.use4"></a>Estimated Return by Prosper Score (Risk) - Multivariate
+```{r, fig.width=9, echo=FALSE}
+p.use4 <- ggplot(data = subset(prosper, !is.na(ProsperScore)),
+       aes(x = ProsperScore, y = EstimatedReturn, color = ProsperScore)) +
+  geom_boxplot() +
+  facet_wrap(~ListingCreationYear, scales = 'free') +
+  xlab('Prosper Score (Risk) 1:Higest, 11:Lowest') +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  ylab('Estimated Return') +
+  ggtitle('Estimated Return by Prosper Score (Risk) - Listing Creation Year')
+
+p.use4
+```
+This visualization demonstrates how Prosper has adjusted their process to receive the highest estimated returns from the highest risk borrowers.
+
+```{r, echo=FALSE}
+years = seq(2009, 2014, 1)
+
+for(y in years) {
+  print(y)
+  result <- with(subset(prosper, ListingCreationYear == y),
+             cor.test(ProsperScore..numeric., EstimatedReturn,
+                      method = 'pearson'))
+  print(result$estimate)
+}
+```
+For the most part, with each year, ProsperScore becomes a better predictor of EstimatedReturn (i.e. the lowest risk borrowers (11) have the lowest EstimatedReturn).
+
+[Retrun to Final Plots & Summary](#final)
+
+***
+### <a id="p.use5"></a>Stated Monthly Income by Estimated Return - Multivariate
+```{r, echo=FALSE}
+summary(prosper$StatedMonthlyIncome)
+summary(prosper$EstimatedReturn)
+```
+
+```{r, fig.width=10, fig.height=9, echo=FALSE}
+p.use5 <- ggplot(data = subset(prosper, ListingCreationDate > 2009-07-31 &
+                                 !is.na(ProsperScore) &
+                                 StatedMonthlyIncome > 10),
+       aes(y = EstimatedReturn, x = StatedMonthlyIncome,
+           color = ProsperScore)) +
+  geom_density_2d() +
+  scale_x_log10(expression(paste(Log[10], ' of Stated Monthly Income')),
+                breaks = scales::trans_breaks("log10", function(x) 10^x),
+                labels = dollar) +
+  geom_vline(xintercept = c(3200, 4667, 6817), color='#0033FF',
+             linetype=3, size = 1) +
+  geom_hline(yintercept = c(0.074, 0.092, 0.117), color='#0033FF',
+             linetype=3, size = 1) +
+  facet_wrap(~ListingCreationYear, scales = 'free_y') +
+  xlab('Estimated Return') + ylab('Estimated Return') +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45, hjust = 1)) +
+  ggtitle('Estimated Return by Stated Monthly Income')
+
+p.use5
+```
+A density plot is useful for dealing with overplotting.  There is evidence of change in the method of determining EstimatedReturn.  Initially there was a negitive estimated return for the highest risk borrowers, compared to later years with the highest risk customers having the highest estimated return rate.  The dotted blue lines represent 1st quartile, median and 3rd quartile overall for the respective axis.
+
+[Retrun to Final Plots & Summary](#final)
+
+***
+### Stated Monthly Income by ProsperScore (Risk) - Multivariate
+```{r, fig.width=10, echo=FALSE}
+ggplot(data = subset(prosper, ListingCreationDate > 2009-07-31 &
+                       !is.na(ProsperScore) & StatedMonthlyIncome > 10),
+       aes(x = ProsperScore, y = StatedMonthlyIncome, color = ProsperScore)) +
+  geom_boxplot(na.rm = TRUE) +
+  scale_y_log10(expression(paste(Log[10], ' of Stated Monthly Income')),
+                breaks = scales::trans_breaks("log10", function(x) 10^x),
+                labels = scales::trans_format("log10",
+                                              scales::math_format(10^.x))) +
+  facet_wrap(~ListingCreationYear, scales = 'free') +
+  xlab('Prosper Score (Risk) 1:Higest, 11:Lowest') +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  ggtitle(expression(
+    paste(Log[10], ' of Stated Monthly Income by Prosper Score (Risk)')))
+```
+
+```{r, echo=FALSE}
+with(subset(prosper, ListingCreationDate > 2009-07-31),
+     cor.test(ProsperScore..numeric., StatedMonthlyIncome, method = 'pearson'))
+```
+As demonstrated by the visualization, there is no correlation between income and prosper score.
+
+***
+### Density plot of DebtToIncomeRatio by StatedMonthlyIncome colored by Delinquent - Multivariate
+```{r, echo=FALSE}
+summary(subset(prosper, !is.na(StatedMonthlyIncome))$StatedMonthlyIncome)
+summary(subset(prosper, !is.na(DebtToIncomeRatio))$DebtToIncomeRatio)
+```
+
+```{r, fig.width=9, fig.height=9, echo=FALSE}
+ggplot(data = subset(prosper, StatedMonthlyIncome <= 15000 &
+                       DebtToIncomeRatio <= 1.0),
+       aes(x = StatedMonthlyIncome, y = DebtToIncomeRatio,
+           color = Delinquent)) +
+  geom_density_2d() +
+  scale_x_continuous(breaks = seq(0, 15000, 2500), labels = dollar) +
+  scale_y_continuous(breaks = seq(0, 0.8, 0.1)) +
+  geom_hline(yintercept = c(0.14, 0.22, 0.32), color='#0033FF',
+             linetype=3, size = 1) +
+  geom_vline(xintercept = c(3200, 4667, 6817), color='#0033FF',
+             linetype=3, size = 1) +
+  facet_wrap(~ListingCreationYear) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        plot.title = element_text(hjust = 0.5)) +
+  ggtitle('Debt To Income Ratio by Stated Monthly Income')
+```
+
+```{r, echo=FALSE}
+with(subset(prosper, !is.na(ProsperScore)),
+     cor.test(StatedMonthlyIncome, DebtToIncomeRatio, method = 'pearson'))
+```
+DebtToIncomeRatio has been limited to a maximum of 1 and StatedMonthlyIncome has been limited to $15000.  Except for 2014 the distribution of delinquent and non-delinqent accounts is very similar.  The dotted blue lines represent 1st quartile, median and 3rd quartile overall for the respective axis.  There is some tendency for lower income borrowers to have a higher debt to income ratio.
+
+***
+### DebtToIncomeRatio by ListingCreationYear - Multivariate
+```{r, fig.width=10, echo=FALSE}
+ggplot(subset(prosper, !is.na(IncomeRange)),
+       aes(x = as.factor(ListingCreationYear), y = DebtToIncomeRatio)) +
+  geom_boxplot(aes(fill = as.factor(ListingCreationYear))) +
+  scale_y_continuous(limits = c(0, 1)) +
+  facet_wrap(~IncomeRange, scales = 'free_y') +
+  scale_fill_discrete(name = 'Listing\nCreation\nYear') +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        plot.title = element_text(hjust = 0.5)) +
+  xlab('Listing Creation Year') +
+  ggtitle('Debt to Income Ratio by Listing Creation Year - Income Range')
+```
+Again Debt to Income Ratio is limited to 1.  Except for the two lowest income ranges, across all years the median Debt to Income Ratio is below 0.25 and gets lower the greater the income range.
+
+***
+### <a id="p.use6"></a>ProsperRating by ProsperScore - Multivariate
+```{r, fig.width=9, echo=FALSE}
+p.use6 <- ggplot(data = subset(prosper, !is.na(ProsperScore)),
+       aes(ProsperScore..numeric. * CreditScoreRangeLower,
+           ProsperRating..Alpha., color = ProsperScore)) +
+  geom_jitter(alpha = 1/20) +
+  facet_wrap(~ListingCreationYear) + 
+  theme(plot.title = element_text(hjust = 0.5)) +
+  xlab('Prosper Score (Risk) * Credit Score Range Lower') +
+  ylab('Prosper Rating') +
+  ggtitle('Prosper Rating by (Prosper Score * Credit Score Range Lower)')
+
+p.use6
+```
+
+```{r, echo=FALSE}
+years = seq(2009, 2014, 1)
+
+for(y in years) {
+  print(y)
+  result <- with(subset(prosper, ListingCreationYear == y &
+                          !is.na(ProsperScore)),
+             cor.test(ProsperScore..numeric. * CreditScoreRangeLower,
+                      as.numeric(ProsperRating..Alpha.), method = 'pearson'))
+  print(result$estimate)
+}
+```
+The Prosper variable definitions state, ProsperScore is a risk score.  [ProsperRating](https://en.wikipedia.org/wiki/Prosper_Marketplace#Prosper_Ratings) is an estimation of the borrower's estimated loss rate and is determined by (1) credit score and (2) Prosper Score.  Prosper Ratings, from lowest-risk to highest-risk, are labeled AA, A, B, C, D, E, and HR ("High Risk").  There is a strong negative correlation for each year. Prosper may use a slightly different method for combining ProsperScore & CreditScroreRangeLower.
+
+Prosper Rating|Estimated Average Annual Loss Rate
+--------------|----------------------------------
+AA            |0.00-1.99%
+A             |2.00-3.99%
+B             |4.00-5.99%
+C             |6.00-8.99%
+D             |9.00-11.99%
+E             |12.00-14.99%
+HR            |15.00%+
+
+[Retrun to Final Plots & Summary](#final)
+
+***
+## <a id="linear_model"></a>Linear Model to Predict Prosper Score
+This is more a demonstration of the difficulties of using a linear model to predict an outcome when there is a large number of variables to consider.
+```{r, echo=FALSE}
+lmodel <- lm(ProsperScore..numeric. ~
+               TotalInquiries +
+               CurrentDelinquencies +
+               TradesOpenedLast6Months +
+               BankcardUtilization +
+               DebtToIncomeRatio +
+               exp(Ratio_PL_Pay_OT),
+             data = subset(prosper, !is.na(ProsperScore..numeric.) &
+                             ListingCreationDate <= '2011-04-30' &
+                             ListingCreationDate >= '2008-04-01'))
+```
+
+```{r, echo=FALSE}
+summary(lmodel)
+mtable(lmodel)
+```
+
+```{r, echo=FALSE}
+ggplot(data = subset(prosper, !is.na(ProsperScore)),
+       aes(y = ProsperScore, x = 9.185 + (-0.084)*TotalInquiries +
+               (-0.388)*CurrentDelinquencies +
+               (-0.431)*BankcardUtilization +
+               (-1.411)*TradesOpenedLast6Months +
+               (-0.737)*DebtToIncomeRatio +
+               (-0.116)*exp(Ratio_PL_Pay_OT), color = ProsperScore)) +
+  geom_jitter(alpha = 1/20) +
+  geom_abline(color = 'purple', size = 1) +
+  scale_x_continuous(limits = c(-5, 10)) +
+  xlab('Linear Model') + ylab('Prosper Score') +
+  ggtitle('Prosper Score by Experimental Linear Model')
+```
+
+```{r, echo=FALSE}
+prosper[c(344, 607, 754),]
+```
+
+```{r, echo=FALSE}
+# use row 344, 607 and 754 for test data
+
+test.data1 = data.frame(TotalInquiries = 9,
+                       CurrentDelinquencies = 0,
+                       BankcardUtilization = 0.6,
+                       TradesOpenedLast6Months = 1,
+                       DebtToIncomeRatio = 0.45,
+                       Ratio_PL_Pay_OT = 0.75)
+
+test.data2 = data.frame(TotalInquiries = 2,
+                       CurrentDelinquencies = 0,
+                       BankcardUtilization = 0.31,
+                       TradesOpenedLast6Months = 1,
+                       DebtToIncomeRatio = 0.13,
+                       Ratio_PL_Pay_OT = 0.909)
+
+test.data3 = data.frame(TotalInquiries = 4,
+                       CurrentDelinquencies = 13,
+                       BankcardUtilization = 0.82,
+                       TradesOpenedLast6Months = 2,
+                       DebtToIncomeRatio = 0.37,
+                       Ratio_PL_Pay_OT = 0.867)
+
+modelEstimate1 = predict(lmodel, newdata = test.data1,
+                        interval = 'prediction', level = 0.95)
+modelEstimate2 = predict(lmodel, newdata = test.data2,
+                        interval = 'prediction', level = 0.95)
+modelEstimate3 = predict(lmodel, newdata = test.data3,
+                        interval = 'prediction', level = 0.95)
+
+modelEstimate1
+modelEstimate2
+modelEstimate3
+```
+The expected result(s) are 6, 10, and 3 compared to those received (6.6, 7.76 and 1.24).  We can see the predictive power of the model requires refinement.  Perhaps it could be improved by adding more variables to the model or variable transformation (i.e. $Log_{10}(var)$, $\sqrt[3]{var}$, etc).  More likely, this is an instance where success can be gained by applying machine learning methodologies.  The variables chosen and the ListingCreationDate used, came from [Prosper Score](https://www.prosper.com/plp/general-prosper_score/).
+
+***
+## <a id="final"></a>Final Plots & Summary
+### Plot 1
+[Code Plot 1](#p.use1)
+```{r, fig.width=9, echo=FALSE}
+p.use1
+```
+The relationship between Proportion Delinquent and the grouping of the years could be attributable to the loan term length. The majority of loans have a term length of 3 years and some extend to 5 years. Explicit data for the full loan term only exists for loans originating from 2006 until 2009. A mostly complete set of data existis for loans originiating to 2011. A concluding comparison between loans created from 2012 with those created prior to 2012 is not feasable with the available data. Additionally, Prosper introduced new methods for assessing risk (ProsperScore), which subsequently helped to reduce the number of delinquent accounts.
+
+
+### Plot 2
+[Code Plot 2](#p.use3)
+```{r, fig.width=9, echo=FALSE}
+p.use3
+```
+
+```{r, echo=FALSE}
+years = seq(2009, 2014, 1)
+for(y in years) {
+  print(y)
+  result <- with(subset(prosper, ListingCreationYear == y &
+                          !is.na(ProsperScore)),
+             cor.test(BorrowerRate, EstimatedReturn, method = 'pearson'))
+  print(result$estimate)
+}
+```
+As stated in the Prosper Variable Definition spreadsheet, ProsperScore is a custom risk score built using historical Prosper data and is applicable to loans originiating after 2009/07/31. 11 and 1 are the lowest and highest risk respectively. The data show lower risk borrowers have a lower BorrowerRate. Following 2010, there's a significant reduction in the number of higher risk loans and Estimated Return is greater than 0; note the estimated losses in 2009 and 2010.  Borrower Rate is an increasingly strong predictor of Estimated Return. 
+
+### Plot 3
+[Code Plot 3](#p.use6)
+```{r, fig.width=9, echo=FALSE}
+p.use6
+```
+```{r, echo=FALSE}
+years = seq(2009, 2014, 1)
+
+for(y in years) {
+  print(y)
+  result <- with(subset(prosper, ListingCreationYear == y &
+                          !is.na(ProsperScore)),
+             cor.test(ProsperScore..numeric. * CreditScoreRangeLower,
+                      as.numeric(ProsperRating..Alpha.), method = 'pearson'))
+  print(result$estimate)
+}
+```
+ProsperScore is a risk score from 1 (highest risk) to 11 (lowest risk).  [ProsperRating](https://en.wikipedia.org/wiki/Prosper_Marketplace#Prosper_Ratings) is an estimation of the borrower's estimated loss rate and is determined by (1) credit score and (2) Prosper Score.  Prosper Ratings, from lowest-risk to highest-risk, are labeled AA, A, B, C, D, E, and HR ("High Risk").  There is a strong negative correlation for each year.  Prosper may use a slightly different method for combining ProsperScore & CreditScroreRangeLower.
+
+Prosper Rating|Estimated Average Annual Loss Rate
+--------------|----------------------------------
+AA            |0.00-1.99%
+A             |2.00-3.99%
+B             |4.00-5.99%
+C             |6.00-8.99%
+D             |9.00-11.99%
+E             |12.00-14.99%
+HR            |15.00%+
+
+***
+## Reflection
+The initial direction of the investigation was an attempt to ascertain which metrics were most attributable to delinquency.  It quickly became apparent that yearly changes made for more interesting observations.  An important observation was that univariate visualizations offered very little categorical insight until facet wrapped by listing creation year.  The data set begins with the inception of Prosper and spans several tumultuous years for financial markets in general, and for Prospers' business model.  Except Plot 2, the final visualizations demonstrate significant year-over-year change.  The most significant change, seems to be the method by which Prosper evaluates risk, by adding Prosper Score in 2009.  Additionally, lack of business, likely attributable to the 2007 recession, is evident, as is the 2008-2009 cessation of lending cause by regulatory changes.
+
+The attempt to model the Prosper Score with this [Linear Model](#linear_model) was unsuccessful.  My approach was to introduce transformations to the independent variables in hopes of creating a stronger delineation between each factor of Prosper Score.  Specifically, $f(x)  = e^x$ was used to mitigate the introduction of a 0 factor into the model.  Perhaps it will be an instructive endevour to apply machine learning to this data-set following that class.
+
+As stated previously, I struggled and was ultimatly unsuccessful in accuratly modeling the Prosper Score.  
+
+I enjoyed a modicum of success with the strong correclation shown between Prosper Rating and the combined metric of Prosper Score * Credit Score.
+
+***
+## References
+
+1. [RDocumentation - HTML Notebook](https://www.rdocumentation.org/packages/rmarkdown/versions/1.8/topics/html_notebook)
+2. [R Markdown - HTML Documents](http://rmarkdown.rstudio.com/html_document_format.html)
+3. [R-bloggers: Ordianary Least Squares Regression](https://www.r-bloggers.com/ordinary-least-squares-ols-linear-regression-in-r/)
+4. [R Graphics Cookbook](http://www.cookbook-r.com)
+5. [Wikipedia](https://www.wikipedia.org/)
+6. [Prosper Score](#https://www.prosper.com/plp/general-prosper_score/)
+
+
+
