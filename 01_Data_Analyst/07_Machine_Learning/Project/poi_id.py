@@ -8,6 +8,8 @@ import matplotlib.pyplot as plt
 from feature_format import featureFormat, targetFeatureSplit
 from classifier_tester import dump_classifier_and_data
 from sklearn.model_selection import train_test_split
+from sklearn.feature_selection import SelectKBest, f_classif
+from sklearn.preprocessing import MinMaxScaler
 
 from sklearn.metrics import confusion_matrix, precision_score, recall_score, f1_score
 import itertools
@@ -51,18 +53,19 @@ outlier_keys = ['TOTAL', 'LOCKHART EUGENE E', 'THE TRAVEL AGENCY IN THE PARK']
 df = df.drop(outlier_keys)
 
 # Task 3: Create new feature(s)
-df['ratio_bonus_salary'] = df['bonus']/df['salary']
-df['ratio_from_this_person_to_poi'] = df['from_this_person_to_poi']/df['from_messages']
-df['ratio_from_poi_to_this_person'] = df['from_poi_to_this_person']/df['to_messages']
+# df['ratio_bonus_salary'] = df['bonus']/df['salary']
+# df['ratio_from_this_person_to_poi'] = df['from_this_person_to_poi']/df['from_messages']
+# df['ratio_from_poi_to_this_person'] = df['from_poi_to_this_person']/df['to_messages']
 df = df.replace(np.nan, 0.)
-df['poi'] = df['poi'].replace([False, True], [0.0, 1.0])
+df['poi'] = df['poi'].replace([False, True], [0, 1])  # Convert from Boolean to int
 
-new_features = ['ratio_bonus_salary', 'ratio_from_this_person_to_poi', 'ratio_from_poi_to_this_person']
+# new_features = ['ratio_bonus_salary', 'ratio_from_this_person_to_poi', 'ratio_from_poi_to_this_person']
 
-features_list.extend(new_features)
+# features_list.extend(new_features)
 
 # Create final features list
-remove_list = ['email_address', 'other', 'from_messages', 'to_messages', 'deferral_payments']
+# remove_list = ['email_address', 'other', 'from_messages', 'to_messages', 'deferral_payments']
+remove_list = ['email_address']  # because it's text
 for value in remove_list:
     features_list.remove(value)
 
@@ -74,6 +77,33 @@ data = featureFormat(my_dataset, features_list, sort_keys=True)
 labels, features = targetFeatureSplit(data)
 
 
+# Evaluate Current Features
+def select_k_best(features: np.ndarray, labels: list, k: int, classifier=f_classif) -> np.ndarray:
+    """
+    Wrapper function for SelectKBest
+    input:
+        features (np.ndarray)
+        labels (list)
+        k (int or 'all'): how many features to use
+        classifier (function): http://scikit-learn.org/stable/modules/generated/sklearn.feature_selection.SelectKBest.html#sklearn.feature_selection.SelectKBest
+    """
+    # Feature scaling with MinMaxScaler
+    scaler = MinMaxScaler()
+    features = scaler.fit_transform(features)
+    feature_selector = SelectKBest(classifier, k)
+    feature_selector.fit(features, labels)
+    features = feature_selector.transform(features)
+    feature_scores = list(zip(features_list[1:], feature_selector.scores_))
+    score_chart_df = pd.DataFrame(feature_scores, columns=['Feature', 'Score'])
+    score_chart_df = score_chart_df.sort_values(by=['Score'], ascending=False).head(k)
+    new_features_list = list(score_chart_df['Feature'])
+    new_features_list = ['poi'] + new_features_list
+    print(score_chart_df)
+    print('\n')
+    return features, new_features_list
+
+
+# Plot Confusion Matrix
 def plot_confusion_matrix(cm, classes,
                           normalize=False,
                           title='Confusion matrix',
@@ -116,7 +146,10 @@ np.set_printoptions(precision=2)
 class_names = ['Not POI', 'POI']
 
 
-def model_response(clf):
+# Model Output
+def model_response(clf, features, labels):
+    features_train, features_test, labels_train, labels_test = \
+        train_test_split(features, labels, test_size=0.3, random_state=42)
     clf = clf.fit(features_train, labels_train)
     score_ = clf.score(features_test, labels_test)
     print('Score: ', score_)
@@ -144,6 +177,9 @@ def model_response(clf):
     print('Number of True Positives: ', poi_confusion_matrix[1][1])
     return clf
 
+
+# Call the SelectKBest wrapper
+features, features_list = select_k_best(features=features, labels=df['poi'].values, k=6)
 
 # Task 4: Try a variety of classifiers
 # Please name your classifier clf for easy export below.
@@ -201,10 +237,7 @@ clf = GaussianNB()
 
 # Example starting point. Try investigating other evaluation techniques!
 
-features_train, features_test, labels_train, labels_test = \
-    train_test_split(features, labels, test_size=0.3, random_state=42)
-
-clf = model_response(clf)
+clf = model_response(clf, features, labels)
 
 # Task 6: Dump your classifier, dataset, and features_list so anyone can
 # check your results. You do not need to change anything below, but make sure
