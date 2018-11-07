@@ -14,17 +14,17 @@
 
     http://lijiancheng0614.github.io/scikit-learn/modules/generated/sklearn.cross_validation.StratifiedShuffleSplit.html
     previous implementation:
-    >>> sss = StratifiedShuffleSplit(y, 3, test_size=0.5, random_state=0)
-    >>> len(sss)
-    >>> print(sss)
-    >>> for train_index, test_index in sss:
+    sss = StratifiedShuffleSplit(y, 3, test_size=0.5, random_state=0)
+    len(sss)
+    print(sss)
+    for train_index, test_index in sss:
 
     http://scikit-learn.org/stable/modules/generated/sklearn.model_selection.StratifiedShuffleSplit.html#sklearn.model_selection.StratifiedShuffleSplit.split
     current implementation:
-    >>> sss = StratifiedShuffleSplit(n_splits=5, test_size=0.5, random_state=0)
-    >>> sss.get_n_splits(X, y)
-    >>> print(sss)
-    >>> for train_index, test_index in sss.split(X, y):
+    sss = StratifiedShuffleSplit(n_splits=5, test_size=0.5, random_state=0)
+    sss.get_n_splits(X, y)
+    print(sss)
+    for train_index, test_index in sss.split(X, y):
 
 
 """
