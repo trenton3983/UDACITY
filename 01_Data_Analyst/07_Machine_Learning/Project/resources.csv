@@ -1,0 +1,16 @@
+title,author,url
+An Introduction to Feature Selection,Jason Brownlee,https://machinelearningmastery.com/an-introduction-to-feature-selection/
+A Feature Selection Tool for Machine Learning in Python,William Koehrsen,https://towardsdatascience.com/a-feature-selection-tool-for-machine-learning-in-python-b64dd23710f0
+Machine Learning with Scikit-Learn - 42 - Automatic Feature Selection - 1,Cristi Vlad,https://www.youtube.com/watch?v=RXFnwCRb-is
+scikit-learn v0.19.2 Section 1.13 Feature Selection,,http://scikit-learn.org/stable/modules/feature_selection.html
+The Ultimate Python Seaborn Tutorial,,https://elitedatascience.com/python-seaborn-tutorial
+Plotting a diagonal correlation matrix,Michael Waskom,https://seaborn.pydata.org/examples/many_pairwise_correlations.html
+Visualization with Seaborn,Jake VanderPlas,https://jakevdp.github.io/PythonDataScienceHandbook/04.14-visualization-with-seaborn.html
+Classifier Comparison,,http://scikit-learn.org/stable/auto_examples/classification/plot_classifier_comparison.html#sphx-glr-auto-examples-classification-plot-classifier-comparison-py
+Tuning the hyper-parameters of an estimator,,http://scikit-learn.org/stable/modules/grid_search.html
+Comparing randomized search and grid search for hyperparameter estimation,,http://scikit-learn.org/stable/auto_examples/model_selection/plot_randomized_search.html
+Hyperparameter Tuning Using Grid Search - Logistic Regression,Chris Albon,https://chrisalbon.com/machine_learning/model_selection/hyperparameter_tuning_using_grid_search/
+Adaboost Classifier,Chris Albon,https://chrisalbon.com/machine_learning/trees_and_forests/adaboost_classifier/
+Hyperparameter Tuning the Random Forest in Python,William Koehrsen,https://towardsdatascience.com/hyperparameter-tuning-the-random-forest-in-python-using-scikit-learn-28d2aa77dd74
+sklearn.metrics.f1_score,,http://scikit-learn.org/stable/modules/generated/sklearn.metrics.f1_score.html
+Beyond Accuracy: Precision and Recall,William Koehrsen,https://towardsdatascience.com/beyond-accuracy-precision-and-recall-3da06bea9f6c
