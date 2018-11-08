@@ -1,10 +1,13 @@
 import re
 import os
 import glob
+from natsort import natsorted
 
-path = r"E:\Users\Trenton J. McKinney\PycharmProjects\UDACITY\01_Data_Analyst\05_R_Data_Analysis\Subtitles\L3_ Explore One Variable (4 hrs) Subtitles"
+path = r"D:\PythonProjects\UDACITY\L7\en"
 
 files = glob.glob(f'{path}/*.srt')
+
+files = natsorted(files)
 
 # file_name = r"16 - Limiting the Axes.srt"
 
