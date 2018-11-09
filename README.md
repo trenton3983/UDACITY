@@ -3,3 +3,9 @@
 
 
 1. [UDACITY Data Analyst Nanodegree](https://github.com/trenton3983/UDACITY/tree/master/01_Data_Analyst)
+
+
+![Data Analyst Nanodegree Certificate][certificate]
+
+
+[certificate]: DataAnalystNanodegreeCertificate.JPG 
